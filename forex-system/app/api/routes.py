@@ -13,7 +13,7 @@ from loguru import logger
 
 from app.models.schemas import (
     TradingSignal, SignalCard, MarketState, TickData, OHLCV,
-    SignalBias, SignalStatus, SignalAction, RiskLevel,
+    SignalBias, SignalStatus, SignalAction, RiskLevel, MarketSession,
     APIResponse, SignalListResponse, MarketRadarResponse
 )
 from app.services.data_ingestion import data_pipeline
@@ -256,8 +256,42 @@ async def get_market_radar():
     # Get states for all pairs
     for symbol in settings.trading_pairs:
         state = await data_pipeline.get_market_state(symbol)
-        if state and 'current_price' in state:
-            pairs[symbol] = MarketState(**state)
+        if state and 'current_price' in state and state.get('current_price', 0) > 0:
+            # Convert trend string to SignalBias enum
+            trend_str = state.get('trend', 'NEUTRAL')
+            if trend_str == 'BUY':
+                trend = SignalBias.BUY
+            elif trend_str == 'SELL':
+                trend = SignalBias.SELL
+            else:
+                trend = SignalBias.NEUTRAL
+            
+            # Convert session string to MarketSession enum
+            session_str = state.get('session', 'london').lower()
+            session_map = {
+                'london': MarketSession.LONDON,
+                'new_york': MarketSession.NEW_YORK,
+                'tokyo': MarketSession.TOKYO,
+                'sydney': MarketSession.SYDNEY,
+                'new_york': MarketSession.NEW_YORK
+            }
+            session = session_map.get(session_str, MarketSession.LONDON)
+            
+            # Create MarketState with proper types
+            try:
+                pairs[symbol] = MarketState(
+                    symbol=symbol,
+                    current_price=state.get('current_price', 0),
+                    spread=state.get('spread', 0),
+                    volatility=state.get('volatility', 0),
+                    session=session,
+                    trend=trend,
+                    momentum=state.get('momentum', 0),
+                    timestamp=datetime.now(timezone.utc)
+                )
+            except Exception as e:
+                logger.warning(f"Error creating MarketState for {symbol}: {e}")
+                continue
     
     # Get top signals
     all_signals = decision_engine.get_signal_cards()

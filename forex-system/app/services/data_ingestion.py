@@ -209,16 +209,27 @@ class DataIngestionPipeline:
         if not tick:
             return {
                 "symbol": symbol,
+                "current_price": 0.0,
+                "spread": 0.0,
+                "volatility": 0.0,
+                "session": self._get_current_session(),
+                "trend": "NEUTRAL",
+                "momentum": 0.0,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "data_source": "mt5",
+                "data_fresh": False,
                 "status": "no_data",
-                "message": "Waiting for MT5 data...",
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "message": "Waiting for MT5 data..."
             }
         
         base_state = {
             "symbol": symbol,
             "current_price": tick.bid,
             "spread": tick.spread,
+            "volatility": 0.0,  # Default value
             "session": self._get_current_session(),
+            "trend": "NEUTRAL",  # Default value
+            "momentum": 0.0,  # Default value
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "data_source": "mt5",
             "data_fresh": self.mt5_store.is_data_fresh(symbol)
