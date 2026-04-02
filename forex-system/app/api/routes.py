@@ -551,6 +551,160 @@ async def broadcast_ticks():
             await asyncio.sleep(5)
 
 
+# ============== Performance Tracking ==============
+
+from app.services.signal_tracker import signal_tracker
+
+@app.get("/api/performance/stats", tags=["Performance"])
+async def get_performance_stats(
+    days: int = Query(30, ge=1, le=365),
+    symbol: Optional[str] = None
+):
+    """Get performance statistics"""
+    stats = signal_tracker.get_performance_stats(symbol, days)
+    return stats
+
+
+@app.get("/api/performance/signals", tags=["Performance"])
+async def get_performance_signals(limit: int = Query(50, ge=1, le=200)):
+    """Get signal history"""
+    signals = signal_tracker.get_recent_signals(limit)
+    return [s.to_dict() for s in signals]
+
+
+@app.get("/api/performance/by-symbol", tags=["Performance"])
+async def get_performance_by_symbol():
+    """Get performance by symbol"""
+    return signal_tracker.get_performance_by_symbol()
+
+
+@app.get("/api/performance/confidence-accuracy", tags=["Performance"])
+async def get_confidence_accuracy():
+    """Get accuracy by confidence level"""
+    return signal_tracker.calculate_confidence_accuracy()
+
+
+class SignalOutcomeRequest(BaseModel):
+    """Request model for updating signal outcome"""
+    exit_price: float
+    outcome: str  # win, loss, breakeven
+    max_drawdown_pips: Optional[float] = None
+    max_favorable_pips: Optional[float] = None
+
+
+@app.post("/api/signals/{signal_id}/outcome", tags=["Signals"])
+async def update_signal_outcome(signal_id: str, request: SignalOutcomeRequest):
+    """Update signal outcome"""
+    record = signal_tracker.update_outcome(
+        signal_id,
+        request.exit_price,
+        request.outcome,
+        request.max_drawdown_pips,
+        request.max_favorable_pips
+    )
+    
+    if not record:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    
+    return APIResponse(
+        success=True,
+        message="Signal outcome updated",
+        data=record.to_dict()
+    )
+
+
+# ============== HMM Regime Detection ==============
+
+from app.engines.hmm_model import regime_analyzer
+
+@app.get("/api/hmm/regime", tags=["HMM"])
+async def get_hmm_regime(symbol: str = Query("EURUSD")):
+    """Get HMM regime analysis for a symbol"""
+    ohlcv = await data_pipeline.get_ohlcv(symbol, "M15", 100)
+    
+    if not ohlcv or len(ohlcv) < 20:
+        return {
+            "current_state": {
+                "regime": "unknown",
+                "probability": 0,
+                "transition_probabilities": {},
+                "confidence": 0
+            },
+            "forecasts": [],
+            "stability": {"score": 0},
+            "trading_implications": {}
+        }
+    
+    analysis = regime_analyzer.analyze(ohlcv)
+    return analysis
+
+
+# ============== MCMC Probability Estimation ==============
+
+from app.engines.mcmc_engine import mcmc_engine, uncertainty_quantifier
+from app.engines.feature_engine import feature_engine
+
+@app.get("/api/mcmc/estimate", tags=["MCMC"])
+async def get_mcmc_estimate(symbol: str = Query("EURUSD")):
+    """Get MCMC probability estimates for a symbol"""
+    ohlcv = await data_pipeline.get_ohlcv(symbol, "M15", 100)
+    
+    if not ohlcv or len(ohlcv) < 50:
+        return {
+            "direction_probability": {"mean": 0.5, "std": 0.2, "ci_95": [0.3, 0.7], "uncertainty": 0.4},
+            "duration_probability": {"mean": 10, "std": 5, "ci_95": [3, 25]},
+            "confidence_score": 0.3,
+            "convergence_metric": 0.5,
+            "regime_probability": {}
+        }
+    
+    # Calculate features
+    features = feature_engine.calculate_features(symbol, ohlcv)
+    
+    # Get direction prediction from decision engine
+    direction_pred = decision_engine.direction_model.predict(features)
+    duration_pred = decision_engine.duration_model.predict(features, direction_pred.predicted_direction)
+    
+    # Get regime probabilities
+    regime_analysis = regime_analyzer.analyze(ohlcv)
+    regime_probs = regime_analysis.get('current_state', {}).get('transition_probabilities', {})
+    
+    # Get MCMC estimates
+    mcmc_result = mcmc_engine.estimate_probabilities(
+        features,
+        direction_pred.confidence,
+        duration_pred.expected_time_above_minutes,
+        regime_probs
+    )
+    
+    return mcmc_result.to_dict()
+
+
+@app.get("/api/uncertainty/quantify", tags=["MCMC"])
+async def quantify_uncertainty(symbol: str = Query("EURUSD")):
+    """Quantify prediction uncertainty"""
+    ohlcv = await data_pipeline.get_ohlcv(symbol, "M15", 100)
+    
+    if not ohlcv or len(ohlcv) < 50:
+        return {
+            "total_uncertainty": 0.5,
+            "epistemic_uncertainty": 0.3,
+            "aleatoric_uncertainty": 0.2,
+            "prediction_quality": "low"
+        }
+    
+    features = feature_engine.calculate_features(symbol, ohlcv)
+    direction_pred = decision_engine.direction_model.predict(features)
+    
+    uncertainty = uncertainty_quantifier.quantify_uncertainty(
+        direction_pred.confidence,
+        duration_pred.expected_time_above_minutes,
+        features
+    )
+    
+    return uncertainty
+
+
 # Run with: uvicorn app.api.routes:app --reload --host 0.0.0.0 --port 8000
 if __name__ == "__main__":
     import uvicorn

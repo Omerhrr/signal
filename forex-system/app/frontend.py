@@ -122,6 +122,12 @@ def settings_page():
     return render_template('pages/settings.html')
 
 
+@app.route('/performance')
+def performance():
+    """Performance tracking page"""
+    return render_template('pages/performance.html')
+
+
 # ============== HTMX Partial Routes ==============
 
 @app.route('/partials/signal-cards')
@@ -240,6 +246,59 @@ def api_market_radar():
 def api_health():
     """Proxy: Health check"""
     result = run_async(fetch_api("/health"))
+    return jsonify(result)
+
+
+# ============== Performance API Routes ==============
+
+@app.route('/api/performance/stats')
+def api_performance_stats():
+    """Get performance statistics"""
+    days = request.args.get('days', 30)
+    symbol = request.args.get('symbol', '')
+    endpoint = f"/api/performance/stats?days={days}"
+    if symbol:
+        endpoint += f"&symbol={symbol}"
+    result = run_async(fetch_api(endpoint))
+    return jsonify(result)
+
+
+@app.route('/api/performance/signals')
+def api_performance_signals():
+    """Get signal history"""
+    limit = request.args.get('limit', 50)
+    result = run_async(fetch_api(f"/api/performance/signals?limit={limit}"))
+    return jsonify(result)
+
+
+@app.route('/api/performance/by-symbol')
+def api_performance_by_symbol():
+    """Get performance by symbol"""
+    result = run_async(fetch_api("/api/performance/by-symbol"))
+    return jsonify(result)
+
+
+@app.route('/api/hmm/regime')
+def api_hmm_regime():
+    """Get HMM regime state"""
+    symbol = request.args.get('symbol', 'EURUSD')
+    result = run_async(fetch_api(f"/api/hmm/regime?symbol={symbol}"))
+    return jsonify(result)
+
+
+@app.route('/api/mcmc/estimate')
+def api_mcmc_estimate():
+    """Get MCMC probability estimate"""
+    symbol = request.args.get('symbol', 'EURUSD')
+    result = run_async(fetch_api(f"/api/mcmc/estimate?symbol={symbol}"))
+    return jsonify(result)
+
+
+@app.route('/api/signals/<signal_id>/outcome', methods=['POST'])
+def api_signal_outcome(signal_id):
+    """Update signal outcome"""
+    data = request.json
+    result = run_async(fetch_api(f"/api/signals/{signal_id}/outcome", "POST", data))
     return jsonify(result)
 
 

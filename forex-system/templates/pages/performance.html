@@ -1,0 +1,477 @@
+{% extends "base.html" %}
+
+{% block title %}Performance - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="performancePage()">
+    <!-- Header -->
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Signal Performance</h1>
+            <p class="text-gray-600 dark:text-gray-400">Track and analyze signal outcomes</p>
+        </div>
+        <div class="flex space-x-2">
+            <select x-model="selectedPeriod" @change="loadStats()" class="rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700">
+                <option value="7">Last 7 Days</option>
+                <option value="30">Last 30 Days</option>
+                <option value="90">Last 90 Days</option>
+                <option value="365">Last Year</option>
+            </select>
+            <select x-model="selectedSymbol" @change="loadStats()" class="rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700">
+                <option value="">All Symbols</option>
+                <template x-for="symbol in symbols" :key="symbol">
+                    <option :value="symbol" x-text="symbol"></option>
+                </template>
+            </select>
+        </div>
+    </div>
+    
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Win Rate -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">Win Rate</p>
+                    <p class="text-3xl font-bold" :class="stats.win_rate >= 0.6 ? 'text-green-500' : stats.win_rate >= 0.5 ? 'text-yellow-500' : 'text-red-500'">
+                        <span x-text="(stats.win_rate * 100).toFixed(1)"></span>%
+                    </p>
+                </div>
+                <div class="w-12 h-12 rounded-full flex items-center justify-center" :class="stats.win_rate >= 0.6 ? 'bg-green-100 dark:bg-green-900' : stats.win_rate >= 0.5 ? 'bg-yellow-100 dark:bg-yellow-900' : 'bg-red-100 dark:bg-red-900'">
+                    <svg class="w-6 h-6" :class="stats.win_rate >= 0.6 ? 'text-green-500' : stats.win_rate >= 0.5 ? 'text-yellow-500' : 'text-red-500'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+            </div>
+            <div class="mt-4 flex items-center text-sm">
+                <span class="text-green-500" x-text="stats.wins"></span>
+                <span class="text-gray-500 dark:text-gray-400 mx-1">W</span>
+                <span class="text-red-500 ml-2" x-text="stats.losses"></span>
+                <span class="text-gray-500 dark:text-gray-400 mx-1">L</span>
+            </div>
+        </div>
+        
+        <!-- Total Pips -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">Total Pips</p>
+                    <p class="text-3xl font-bold" :class="stats.total_pips >= 0 ? 'text-green-500' : 'text-red-500'">
+                        <span x-text="stats.total_pips >= 0 ? '+' : ''"></span>
+                        <span x-text="stats.total_pips.toFixed(1)"></span>
+                    </p>
+                </div>
+                <div class="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                    </svg>
+                </div>
+            </div>
+            <div class="mt-4 text-sm text-gray-600 dark:text-gray-400">
+                Avg: <span x-text="stats.avg_pips.toFixed(1)"></span> pips/trade
+            </div>
+        </div>
+        
+        <!-- Profit Factor -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">Profit Factor</p>
+                    <p class="text-3xl font-bold" :class="stats.profit_factor >= 1.5 ? 'text-green-500' : stats.profit_factor >= 1 ? 'text-yellow-500' : 'text-red-500'">
+                        <span x-text="stats.profit_factor.toFixed(2)"></span>
+                    </p>
+                </div>
+                <div class="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                </div>
+            </div>
+            <div class="mt-4 text-sm text-gray-600 dark:text-gray-400">
+                Sharpe: <span x-text="stats.sharpe_ratio.toFixed(2)"></span>
+            </div>
+        </div>
+        
+        <!-- Total Signals -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">Total Signals</p>
+                    <p class="text-3xl font-bold text-gray-900 dark:text-white" x-text="stats.total_signals"></p>
+                </div>
+                <div class="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                    </svg>
+                </div>
+            </div>
+            <div class="mt-4 text-sm text-gray-600 dark:text-gray-400">
+                Pending: <span x-text="stats.pending"></span> | Expired: <span x-text="stats.breakeven"></span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Win/Loss Chart -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+            <h3 class="text-lg font-semibold mb-4">Win/Loss Distribution</h3>
+            <div id="winLossChart" class="h-64"></div>
+        </div>
+        
+        <!-- Performance by Session -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+            <h3 class="text-lg font-semibold mb-4">Performance by Session</h3>
+            <div id="sessionChart" class="h-64"></div>
+        </div>
+    </div>
+    
+    <!-- HMM Regime Analysis -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+        <h3 class="text-lg font-semibold mb-4">Market Regime Analysis (HMM)</h3>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+                <h4 class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">Current Regime</h4>
+                <div class="flex items-center space-x-4">
+                    <div class="w-16 h-16 rounded-full flex items-center justify-center text-white font-bold"
+                         :class="{
+                             'bg-green-500': regimeState.regime === 'trending_up',
+                             'bg-red-500': regimeState.regime === 'trending_down',
+                             'bg-blue-500': regimeState.regime === 'ranging',
+                             'bg-yellow-500': regimeState.regime === 'volatile',
+                             'bg-purple-500': regimeState.regime === 'breakout',
+                             'bg-orange-500': regimeState.regime === 'reversal'
+                         }">
+                        <span x-text="regimeState.regime ? regimeState.regime.replace('_', ' ').toUpperCase() : 'LOADING'"></span>
+                    </div>
+                    <div>
+                        <p class="text-2xl font-bold" x-text="(regimeState.probability * 100).toFixed(1) + '%'"></p>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Probability</p>
+                    </div>
+                </div>
+                
+                <!-- Regime Transition Probabilities -->
+                <div class="mt-4 space-y-2">
+                    <h4 class="text-sm font-medium text-gray-600 dark:text-gray-400">Transition Probabilities</h4>
+                    <template x-for="(prob, regime) in regimeState.transition_probabilities" :key="regime">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm capitalize" x-text="regime.replace('_', ' ')"></span>
+                            <div class="flex items-center space-x-2">
+                                <div class="w-24 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                    <div class="h-full bg-blue-500" :style="`width: ${prob * 100}%`"></div>
+                                </div>
+                                <span class="text-sm text-gray-600 dark:text-gray-400" x-text="(prob * 100).toFixed(1) + '%'"></span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            
+            <div id="regimeChart" class="h-64"></div>
+        </div>
+    </div>
+    
+    <!-- MCMC Probability Distribution -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+        <h3 class="text-lg font-semibold mb-4">Probability Distribution (MCMC)</h3>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Direction Probability -->
+            <div>
+                <h4 class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">Direction Probability</h4>
+                <div class="text-center">
+                    <div class="relative w-32 h-32 mx-auto">
+                        <svg class="w-32 h-32 transform -rotate-90">
+                            <circle cx="64" cy="64" r="56" stroke="currentColor" stroke-width="8" fill="none" class="text-gray-200 dark:text-gray-700"/>
+                            <circle cx="64" cy="64" r="56" stroke="currentColor" stroke-width="8" fill="none"
+                                    :stroke-dasharray="`${mcmcResult.direction_probability.mean * 352} 352`"
+                                    :class="mcmcResult.direction_probability.mean >= 0.6 ? 'text-green-500' : 'text-yellow-500'"/>
+                        </svg>
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <span class="text-2xl font-bold" x-text="(mcmcResult.direction_probability.mean * 100).toFixed(1) + '%'"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
+                    <p>95% CI: <span x-text="(mcmcResult.direction_probability.ci_95[0] * 100).toFixed(1)"></span>% - <span x-text="(mcmcResult.direction_probability.ci_95[1] * 100).toFixed(1)"></span>%</p>
+                    <p>Uncertainty: <span x-text="(mcmcResult.direction_probability.uncertainty * 100).toFixed(1)"></span>%</p>
+                </div>
+            </div>
+            
+            <!-- Duration Estimate -->
+            <div>
+                <h4 class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">Duration Estimate (min)</h4>
+                <div class="text-center">
+                    <p class="text-4xl font-bold text-blue-500" x-text="mcmcResult.duration_probability.mean.toFixed(1)"></p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">Expected Duration</p>
+                </div>
+                <div class="mt-4">
+                    <div class="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
+                        <span x-text="mcmcResult.duration_probability.ci_95[0].toFixed(1)"></span>
+                        <span x-text="mcmcResult.duration_probability.ci_95[1].toFixed(1)"></span>
+                    </div>
+                    <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full">
+                        <div class="h-full bg-blue-500 rounded-full" :style="`width: ${(mcmcResult.duration_probability.mean / mcmcResult.duration_probability.ci_95[1]) * 100}%`"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Confidence Score -->
+            <div>
+                <h4 class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">Overall Confidence</h4>
+                <div class="text-center">
+                    <p class="text-4xl font-bold" :class="mcmcResult.confidence_score >= 0.7 ? 'text-green-500' : mcmcResult.confidence_score >= 0.5 ? 'text-yellow-500' : 'text-red-500'" x-text="(mcmcResult.confidence_score * 100).toFixed(1) + '%'"></p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">Model Confidence</p>
+                </div>
+                <div class="mt-4 text-center text-sm">
+                    <span class="px-3 py-1 rounded-full text-white" :class="mcmcResult.convergence_metric >= 0.9 ? 'bg-green-500' : 'bg-yellow-500'" x-text="mcmcResult.convergence_metric >= 0.9 ? 'Converged' : 'Converging'"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Signal History Table -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-semibold">Signal History</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Signal ID</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Symbol</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Direction</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Entry</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Confidence</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Outcome</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Pips</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Time</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    <template x-for="signal in signalHistory" :key="signal.signal_id">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono" x-text="signal.signal_id.substring(0, 20) + '...'"></td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" x-text="signal.symbol"></td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 py-1 text-xs font-semibold rounded-full" :class="signal.bias === 'BUY' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'" x-text="signal.bias"></span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm" x-text="signal.entry_price.toFixed(5)"></td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="w-16 h-2 bg-gray-200 dark:bg-gray-700 rounded-full mr-2">
+                                        <div class="h-full rounded-full" :class="signal.confidence >= 0.7 ? 'bg-green-500' : signal.confidence >= 0.5 ? 'bg-yellow-500' : 'bg-red-500'" :style="`width: ${signal.confidence * 100}%`"></div>
+                                    </div>
+                                    <span class="text-sm" x-text="(signal.confidence * 100).toFixed(0) + '%'"></span>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 py-1 text-xs font-semibold rounded-full" :class="{
+                                    'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': signal.outcome === 'win',
+                                    'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': signal.outcome === 'loss',
+                                    'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200': signal.outcome === 'pending',
+                                    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': signal.outcome === 'breakeven'
+                                }" x-text="signal.outcome.toUpperCase()"></span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" :class="signal.pips_gained >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'" x-text="(signal.pips_gained >= 0 ? '+' : '') + (signal.pips_gained || 0).toFixed(1)"></td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400" x-text="formatDate(signal.created_at)"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Performance by Symbol -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+        <h3 class="text-lg font-semibold mb-4">Performance by Symbol</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <template x-for="(perf, symbol) in symbolPerformance" :key="symbol">
+                <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="font-semibold" x-text="symbol"></span>
+                        <span class="text-sm" :class="perf.win_rate >= 0.6 ? 'text-green-500' : 'text-yellow-500'" x-text="(perf.win_rate * 100).toFixed(0) + '%'"></span>
+                    </div>
+                    <div class="text-sm text-gray-600 dark:text-gray-400">
+                        <p><span x-text="perf.wins"></span>W / <span x-text="perf.losses"></span>L</p>
+                        <p>Total: <span :class="perf.total_pips >= 0 ? 'text-green-500' : 'text-red-500'" x-text="(perf.total_pips >= 0 ? '+' : '') + perf.total_pips.toFixed(1) + ' pips'"></span></p>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+
+<script>
+function performancePage() {
+    return {
+        selectedPeriod: 30,
+        selectedSymbol: '',
+        symbols: ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AUDUSD'],
+        stats: {
+            total_signals: 0,
+            wins: 0,
+            losses: 0,
+            win_rate: 0,
+            avg_pips: 0,
+            total_pips: 0,
+            profit_factor: 0,
+            sharpe_ratio: 0,
+            pending: 0,
+            breakeven: 0
+        },
+        signalHistory: [],
+        symbolPerformance: {},
+        regimeState: {
+            regime: 'loading',
+            probability: 0.5,
+            transition_probabilities: {}
+        },
+        mcmcResult: {
+            direction_probability: { mean: 0.5, ci_95: [0.3, 0.7], uncertainty: 0.2 },
+            duration_probability: { mean: 10, ci_95: [5, 20] },
+            confidence_score: 0.5,
+            convergence_metric: 0.9
+        },
+        
+        init() {
+            this.loadStats();
+            this.loadSignalHistory();
+            this.loadSymbolPerformance();
+            this.loadRegimeState();
+            this.loadMCMCResult();
+            
+            // Refresh every 30 seconds
+            setInterval(() => {
+                this.loadStats();
+                this.loadSignalHistory();
+            }, 30000);
+        },
+        
+        async loadStats() {
+            try {
+                const response = await fetch(`/api/performance/stats?days=${this.selectedPeriod}${this.selectedSymbol ? '&symbol=' + this.selectedSymbol : ''}`);
+                if (response.ok) {
+                    this.stats = await response.json();
+                    this.initWinLossChart();
+                    this.initSessionChart();
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        },
+        
+        async loadSignalHistory() {
+            try {
+                const response = await fetch(`/api/performance/signals?limit=50`);
+                if (response.ok) {
+                    this.signalHistory = await response.json();
+                }
+            } catch (error) {
+                console.error('Error loading signal history:', error);
+            }
+        },
+        
+        async loadSymbolPerformance() {
+            try {
+                const response = await fetch('/api/performance/by-symbol');
+                if (response.ok) {
+                    this.symbolPerformance = await response.json();
+                }
+            } catch (error) {
+                console.error('Error loading symbol performance:', error);
+            }
+        },
+        
+        async loadRegimeState() {
+            try {
+                const response = await fetch('/api/hmm/regime');
+                if (response.ok) {
+                    const data = await response.json();
+                    this.regimeState = data.current_state || this.regimeState;
+                    this.initRegimeChart();
+                }
+            } catch (error) {
+                console.error('Error loading regime state:', error);
+            }
+        },
+        
+        async loadMCMCResult() {
+            try {
+                const response = await fetch('/api/mcmc/estimate');
+                if (response.ok) {
+                    this.mcmcResult = await response.json();
+                }
+            } catch (error) {
+                console.error('Error loading MCMC result:', error);
+            }
+        },
+        
+        initWinLossChart() {
+            const chart = echarts.init(document.getElementById('winLossChart'));
+            chart.setOption({
+                tooltip: { trigger: 'item' },
+                legend: { bottom: '5%', left: 'center' },
+                series: [{
+                    type: 'pie',
+                    radius: ['40%', '70%'],
+                    avoidLabelOverlap: false,
+                    itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
+                    label: { show: false },
+                    emphasis: { label: { show: true, fontSize: 16, fontWeight: 'bold' } },
+                    data: [
+                        { value: this.stats.wins, name: 'Wins', itemStyle: { color: '#10B981' } },
+                        { value: this.stats.losses, name: 'Losses', itemStyle: { color: '#EF4444' } },
+                        { value: this.stats.breakeven, name: 'Breakeven', itemStyle: { color: '#F59E0B' } }
+                    ]
+                }]
+            });
+        },
+        
+        initSessionChart() {
+            const chart = echarts.init(document.getElementById('sessionChart'));
+            const sessions = this.stats.by_session || {};
+            chart.setOption({
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                xAxis: { type: 'category', data: Object.keys(sessions) },
+                yAxis: { type: 'value', max: 1 },
+                series: [{
+                    type: 'bar',
+                    data: Object.values(sessions).map(s => ({
+                        value: s.win_rate,
+                        itemStyle: { color: s.win_rate >= 0.6 ? '#10B981' : s.win_rate >= 0.5 ? '#F59E0B' : '#EF4444' }
+                    })),
+                    label: { show: true, formatter: '{c}', position: 'top' }
+                }]
+            });
+        },
+        
+        initRegimeChart() {
+            const chart = echarts.init(document.getElementById('regimeChart'));
+            const probs = this.regimeState.transition_probabilities || {};
+            chart.setOption({
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                xAxis: { type: 'category', data: Object.keys(probs).map(k => k.replace('_', ' ')), axisLabel: { rotate: 45 } },
+                yAxis: { type: 'value', max: 1 },
+                series: [{
+                    type: 'bar',
+                    data: Object.values(probs),
+                    itemStyle: {
+                        color: function(params) {
+                            const colors = ['#10B981', '#EF4444', '#3B82F6', '#F59E0B', '#8B5CF6', '#F97316'];
+                            return colors[params.dataIndex % colors.length];
+                        }
+                    }
+                }]
+            });
+        },
+        
+        formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+    }
+}
+</script>
+{% endblock %}
