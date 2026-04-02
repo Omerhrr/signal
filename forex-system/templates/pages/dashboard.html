@@ -1,0 +1,441 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div x-data="dashboardApp()" x-init="init()">
+    <!-- Header -->
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Trading Dashboard</h1>
+        <p class="text-gray-600 dark:text-gray-400 mt-1">Real-time forex probability intelligence</p>
+    </div>
+    
+    <!-- Stats Row -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <!-- Active Signals -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border border-gray-200 dark:border-gray-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">Active Signals</p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="activeSignals.length">0</p>
+                </div>
+                <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                    <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Buy Signals -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border border-gray-200 dark:border-gray-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">Buy Signals</p>
+                    <p class="text-2xl font-bold text-green-600 dark:text-green-400" x-text="buyCount">0</p>
+                </div>
+                <div class="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                    <svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sell Signals -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border border-gray-200 dark:border-gray-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">Sell Signals</p>
+                    <p class="text-2xl font-bold text-red-600 dark:text-red-400" x-text="sellCount">0</p>
+                </div>
+                <div class="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
+                    <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Market Sentiment -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border border-gray-200 dark:border-gray-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">Market Sentiment</p>
+                    <p class="text-2xl font-bold" :class="sentimentClass" x-text="marketSentiment">NEUTRAL</p>
+                </div>
+                <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                    <svg class="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Signal Cards -->
+        <div class="lg:col-span-2">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Active Signals</h2>
+                    <button @click="generateSignal()" :disabled="generating" 
+                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg flex items-center space-x-2 disabled:opacity-50">
+                        <svg x-show="!generating" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        <svg x-show="generating" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        <span x-text="generating ? 'Generating...' : 'Generate Signal'"></span>
+                    </button>
+                </div>
+                <div class="p-4 space-y-3" id="signals-container">
+                    <template x-for="signal in activeSignals" :key="signal.signal_id">
+                        <div class="signal-card rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+                             :class="signal.bias === 'BUY' ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-red-500'">
+                            <div class="p-4">
+                                <div class="flex justify-between items-start mb-3">
+                                    <div class="flex items-center space-x-3">
+                                        <span class="px-2 py-1 text-xs font-semibold rounded"
+                                              :class="signal.bias === 'BUY' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'"
+                                              x-text="signal.bias"></span>
+                                        <span class="font-bold text-gray-900 dark:text-white" x-text="signal.symbol"></span>
+                                    </div>
+                                    <span class="px-2 py-1 text-xs rounded-full"
+                                          :style="'background-color: ' + signal.status_color + '20; color: ' + signal.status_color"
+                                          x-text="signal.status"></span>
+                                </div>
+                                
+                                <div class="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <p class="text-gray-500 dark:text-gray-400">Entry Zone</p>
+                                        <p class="font-medium text-gray-900 dark:text-white" x-text="signal.entry_zone"></p>
+                                    </div>
+                                    <div>
+                                        <p class="text-gray-500 dark:text-gray-400">Expected Duration</p>
+                                        <p class="font-medium text-gray-900 dark:text-white" x-text="signal.expected_duration"></p>
+                                    </div>
+                                    <div>
+                                        <p class="text-gray-500 dark:text-gray-400">Confidence</p>
+                                        <div class="flex items-center space-x-2">
+                                            <div class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                                <div class="h-full rounded-full transition-all duration-500"
+                                                     :class="signal.confidence >= 0.8 ? 'bg-green-500' : signal.confidence >= 0.65 ? 'bg-yellow-500' : 'bg-red-500'"
+                                                     :style="'width: ' + (signal.confidence * 100) + '%'"></div>
+                                            </div>
+                                            <span class="font-medium" x-text="(signal.confidence * 100).toFixed(0) + '%'"></span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p class="text-gray-500 dark:text-gray-400">Risk Level</p>
+                                        <span class="px-2 py-0.5 text-xs font-medium rounded"
+                                              :class="signal.risk_level === 'low' ? 'bg-green-100 text-green-700' : signal.risk_level === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'"
+                                              x-text="signal.risk_level?.toUpperCase()"></span>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
+                                    <span x-text="'Created: ' + formatTime(signal.created_at)"></span>
+                                    <span x-text="signal.status_message || signal.action"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    
+                    <div x-show="activeSignals.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
+                        <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                        <p>No active signals</p>
+                        <p class="text-sm mt-1">Click "Generate Signal" to create a new signal</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Column -->
+        <div class="space-y-6">
+            <!-- Market Radar -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Market Radar</h2>
+                </div>
+                <div class="p-4">
+                    <div class="space-y-3">
+                        <template x-for="(data, symbol) in marketTicks" :key="symbol">
+                            <div class="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-700/50">
+                                <div class="flex items-center space-x-2">
+                                    <span class="font-medium text-gray-900 dark:text-white" x-text="symbol"></span>
+                                </div>
+                                <div class="text-right">
+                                    <p class="font-medium text-gray-900 dark:text-white" x-text="data.bid?.toFixed(5) || '---'"></p>
+                                    <p class="text-xs" :class="parseFloat(data.spread) > 2 ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'"
+                                       x-text="'Spread: ' + data.spread + ' pips'"></p>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Probability Chart -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Probability Distribution</h2>
+                </div>
+                <div class="p-4">
+                    <div id="probability-chart" class="h-64"></div>
+                </div>
+            </div>
+            
+            <!-- Expected Duration -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Duration Analysis</h2>
+                </div>
+                <div class="p-4">
+                    <div id="duration-chart" class="h-48"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Confidence Meter -->
+    <div class="mt-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Signal Confidence Meter</h3>
+        <div class="relative h-8 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
+            <div class="absolute inset-0 confidence-meter opacity-50"></div>
+            <div class="absolute h-full bg-white dark:bg-gray-900 transition-all duration-500"
+                 :style="'right: ' + (100 - avgConfidence * 100) + '%'"></div>
+            <div class="absolute inset-0 flex items-center justify-center">
+                <span class="text-sm font-bold text-white drop-shadow" x-text="'Avg Confidence: ' + (avgConfidence * 100).toFixed(0) + '%'"></span>
+            </div>
+        </div>
+        <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-2">
+            <span>Low</span>
+            <span>Medium</span>
+            <span>High</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function dashboardApp() {
+    return {
+        activeSignals: [],
+        marketTicks: {},
+        marketSentiment: 'NEUTRAL',
+        generating: false,
+        probabilityChart: null,
+        durationChart: null,
+        
+        get buyCount() {
+            return this.activeSignals.filter(s => s.bias === 'BUY').length;
+        },
+        
+        get sellCount() {
+            return this.activeSignals.filter(s => s.bias === 'SELL').length;
+        },
+        
+        get avgConfidence() {
+            if (this.activeSignals.length === 0) return 0.5;
+            return this.activeSignals.reduce((sum, s) => sum + s.confidence, 0) / this.activeSignals.length;
+        },
+        
+        get sentimentClass() {
+            if (this.marketSentiment === 'BULLISH') return 'text-green-600 dark:text-green-400';
+            if (this.marketSentiment === 'BEARISH') return 'text-red-600 dark:text-red-400';
+            return 'text-gray-600 dark:text-gray-400';
+        },
+        
+        init() {
+            this.loadSignals();
+            this.loadMarketData();
+            this.initCharts();
+            
+            // Auto-refresh every 5 seconds
+            setInterval(() => {
+                this.loadSignals();
+                this.loadMarketData();
+            }, 5000);
+        },
+        
+        async loadSignals() {
+            try {
+                const response = await fetch('/api/signals/cards');
+                const data = await response.json();
+                if (data.success) {
+                    this.activeSignals = data.data;
+                }
+            } catch (error) {
+                console.error('Error loading signals:', error);
+            }
+        },
+        
+        async loadMarketData() {
+            try {
+                const response = await fetch('/api/ticks');
+                const data = await response.json();
+                if (data.success) {
+                    this.marketTicks = data.data;
+                }
+                
+                // Load market radar
+                const radarResponse = await fetch('/api/market-radar');
+                const radarData = await radarResponse.json();
+                if (radarData.market_sentiment) {
+                    this.marketSentiment = radarData.market_sentiment;
+                }
+            } catch (error) {
+                console.error('Error loading market data:', error);
+            }
+        },
+        
+        async generateSignal(symbol = 'EURUSD') {
+            this.generating = true;
+            try {
+                const response = await fetch('/api/signals/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ symbol, timeframe: 'M15' })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    await this.loadSignals();
+                    this.updateCharts();
+                } else {
+                    console.log('No signal generated:', data.message);
+                }
+            } catch (error) {
+                console.error('Error generating signal:', error);
+            } finally {
+                this.generating = false;
+            }
+        },
+        
+        initCharts() {
+            // Probability Chart
+            this.probabilityChart = echarts.init(document.getElementById('probability-chart'));
+            this.updateProbabilityChart();
+            
+            // Duration Chart
+            this.durationChart = echarts.init(document.getElementById('duration-chart'));
+            this.updateDurationChart();
+            
+            // Handle resize
+            window.addEventListener('resize', () => {
+                this.probabilityChart?.resize();
+                this.durationChart?.resize();
+            });
+        },
+        
+        updateCharts() {
+            this.updateProbabilityChart();
+            this.updateDurationChart();
+        },
+        
+        updateProbabilityChart() {
+            if (!this.probabilityChart) return;
+            
+            const data = this.activeSignals.map(s => ({
+                name: s.symbol,
+                value: [s.confidence * 100, s.probability * 100]
+            }));
+            
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: Confidence {c0}%, Probability {c1}%'
+                },
+                xAxis: {
+                    type: 'category',
+                    data: data.map(d => d.name),
+                    axisLabel: { color: '#9CA3AF' },
+                    axisLine: { lineStyle: { color: '#374151' } }
+                },
+                yAxis: {
+                    type: 'value',
+                    max: 100,
+                    axisLabel: { color: '#9CA3AF', formatter: '{value}%' },
+                    splitLine: { lineStyle: { color: '#374151', type: 'dashed' } }
+                },
+                series: [
+                    {
+                        name: 'Confidence',
+                        type: 'bar',
+                        data: data.map(d => d.value[0]),
+                        itemStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: '#3B82F6' },
+                                { offset: 1, color: '#1D4ED8' }
+                            ])
+                        }
+                    },
+                    {
+                        name: 'Probability',
+                        type: 'bar',
+                        data: data.map(d => d.value[1]),
+                        itemStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: '#10B981' },
+                                { offset: 1, color: '#059669' }
+                            ])
+                        }
+                    }
+                ]
+            };
+            
+            this.probabilityChart.setOption(option);
+        },
+        
+        updateDurationChart() {
+            if (!this.durationChart) return;
+            
+            const durations = this.activeSignals.map(s => {
+                const match = s.expected_duration?.match(/(\d+)/);
+                return match ? parseInt(match[1]) : 10;
+            });
+            
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: {c} min'
+                },
+                series: [{
+                    type: 'pie',
+                    radius: ['40%', '70%'],
+                    avoidLabelOverlap: false,
+                    itemStyle: {
+                        borderRadius: 10,
+                        borderColor: '#1F2937',
+                        borderWidth: 2
+                    },
+                    label: { show: false },
+                    data: durations.map((d, i) => ({
+                        value: d,
+                        name: this.activeSignals[i]?.symbol || `Signal ${i+1}`
+                    }))
+                }],
+                color: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']
+            };
+            
+            this.durationChart.setOption(option);
+        },
+        
+        formatTime(timestamp) {
+            if (!timestamp) return '';
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString();
+        }
+    };
+}
+</script>
+{% endblock %}

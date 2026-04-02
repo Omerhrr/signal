@@ -1,0 +1,523 @@
+"""
+Forex Probability Intelligence System - FastAPI Backend
+API Endpoints for the trading system - MT5 Data Source Only
+"""
+import asyncio
+from datetime import datetime, timezone
+from typing import List, Optional, Dict, Any
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+from loguru import logger
+
+from app.models.schemas import (
+    TradingSignal, SignalCard, MarketState, TickData, OHLCV,
+    SignalBias, SignalStatus, SignalAction, RiskLevel,
+    APIResponse, SignalListResponse, MarketRadarResponse
+)
+from app.services.data_ingestion import data_pipeline
+from app.engines.decision_engine import decision_engine, signal_aggregator
+from app.engines.risk_engine import risk_engine
+from config.settings import get_settings
+
+settings = get_settings()
+
+# Create FastAPI app
+app = FastAPI(
+    title=settings.app_name,
+    version=settings.app_version,
+    description="API for Forex Probability Intelligence System - MT5 Data Source"
+)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ============== Pydantic Models for API ==============
+
+class SignalGenerateRequest(BaseModel):
+    symbol: str
+    timeframe: str = "M15"
+
+
+class HealthResponse(BaseModel):
+    status: str
+    version: str
+    uptime: str
+    data_source: str
+    mt5_connected: bool
+    components: Dict[str, bool]
+
+
+class MT5TickRequest(BaseModel):
+    """MT5 tick data from Windows bridge"""
+    symbol: str
+    bid: float
+    ask: float
+    spread: float = 0.0
+    volume: int = 0
+    timestamp: Optional[str] = None
+
+
+class MT5OHLCVRequest(BaseModel):
+    """MT5 OHLCV data from Windows bridge"""
+    symbol: str
+    timeframe: str = "M15"
+    candles: List[Dict[str, Any]]
+
+
+# ============== Startup & Shutdown ==============
+
+start_time = datetime.now(timezone.utc)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize on startup"""
+    logger.info("Starting Forex Probability Intelligence System API")
+    
+    # Start data pipeline
+    success = await data_pipeline.start()
+    
+    if success:
+        logger.info("API started - Waiting for MT5 data from Windows bridge")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown"""
+    logger.info("Shutting down API")
+    await data_pipeline.stop()
+
+
+# ============== MT5 Data Ingestion Endpoints ==============
+
+@app.post("/api/mt5/tick", tags=["MT5 Bridge"])
+async def receive_mt5_tick(tick: MT5TickRequest):
+    """Receive tick data from MT5 Windows bridge"""
+    tick_data = {
+        "bid": tick.bid,
+        "ask": tick.ask,
+        "spread": tick.spread,
+        "volume": tick.volume,
+        "timestamp": tick.timestamp or datetime.now(timezone.utc).isoformat()
+    }
+    
+    received_tick = data_pipeline.receive_tick(tick.symbol, tick_data)
+    
+    return {"success": True, "symbol": tick.symbol, "bid": tick.bid, "ask": tick.ask}
+
+
+@app.post("/api/mt5/ohlcv", tags=["MT5 Bridge"])
+async def receive_mt5_ohlcv(data: MT5OHLCVRequest):
+    """Receive OHLCV data from MT5 Windows bridge"""
+    ohlcv = data_pipeline.receive_ohlcv(data.symbol, data.timeframe, data.candles)
+    
+    return {"success": True, "symbol": data.symbol, "timeframe": data.timeframe, "count": len(ohlcv)}
+
+
+@app.get("/api/mt5/status", tags=["MT5 Bridge"])
+async def get_mt5_status():
+    """Get MT5 connection status"""
+    symbols_status = {}
+    for symbol in settings.trading_pairs:
+        tick = data_pipeline.mt5_store.get_tick(symbol)
+        symbols_status[symbol] = {
+            "has_data": tick is not None,
+            "last_update": data_pipeline.mt5_store.last_update.get(symbol, None),
+            "is_fresh": data_pipeline.mt5_store.is_data_fresh(symbol)
+        }
+    
+    return {
+        "mt5_connected": data_pipeline.mt5_store.connected,
+        "symbols": symbols_status
+    }
+
+
+# ============== Health & Status ==============
+
+@app.get("/health", response_model=HealthResponse, tags=["System"])
+async def health_check():
+    """Check system health status"""
+    uptime = datetime.now(timezone.utc) - start_time
+    
+    return HealthResponse(
+        status="healthy",
+        version=settings.app_version,
+        uptime=str(uptime).split('.')[0],
+        data_source="mt5",
+        mt5_connected=data_pipeline.mt5_store.connected,
+        components={
+            "data_pipeline": data_pipeline.connected,
+            "redis": data_pipeline.redis_manager.connected
+        }
+    )
+
+
+@app.get("/api/status", tags=["System"])
+async def get_system_status():
+    """Get detailed system status"""
+    failure_stats = risk_engine.get_failure_stats()
+    should_pause, pause_reason = risk_engine.should_pause_trading()
+    
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "data_source": "mt5",
+        "mt5_connected": data_pipeline.mt5_store.connected,
+        "active_signals": len(decision_engine.active_signals),
+        "trading_pairs": settings.trading_pairs,
+        "failure_stats": failure_stats,
+        "trading_paused": should_pause,
+        "pause_reason": pause_reason
+    }
+
+
+# ============== Market Data ==============
+
+@app.get("/api/tick/{symbol}", response_model=APIResponse, tags=["Market Data"])
+async def get_tick(symbol: str):
+    """Get current tick for a symbol"""
+    tick = await data_pipeline.get_tick(symbol.upper())
+    
+    if not tick:
+        raise HTTPException(status_code=404, detail=f"No tick data for {symbol}. Is MT5 bridge running?")
+    
+    return APIResponse(
+        success=True,
+        message="Tick data retrieved",
+        data=tick.dict()
+    )
+
+
+@app.get("/api/ticks", response_model=APIResponse, tags=["Market Data"])
+async def get_all_ticks():
+    """Get current ticks for all trading pairs"""
+    ticks = {}
+    
+    for symbol in settings.trading_pairs:
+        tick = await data_pipeline.get_tick(symbol)
+        if tick:
+            ticks[symbol] = tick.dict()
+    
+    return APIResponse(
+        success=True,
+        message="All ticks retrieved",
+        data=ticks
+    )
+
+
+@app.get("/api/ohlcv/{symbol}", response_model=APIResponse, tags=["Market Data"])
+async def get_ohlcv(
+    symbol: str,
+    timeframe: str = Query("M15", description="Timeframe: M1, M5, M15, M30, H1, H4, D1"),
+    count: int = Query(100, ge=10, le=1000)
+):
+    """Get OHLCV data for a symbol"""
+    ohlcv = await data_pipeline.get_ohlcv(symbol.upper(), timeframe, count)
+    
+    if not ohlcv:
+        raise HTTPException(status_code=404, detail=f"No OHLCV data for {symbol}. Is MT5 bridge running?")
+    
+    return APIResponse(
+        success=True,
+        message=f"OHLCV data retrieved ({len(ohlcv)} candles)",
+        data=[c.dict() for c in ohlcv]
+    )
+
+
+@app.get("/api/market-state/{symbol}", response_model=APIResponse, tags=["Market Data"])
+async def get_market_state(symbol: str):
+    """Get current market state for a symbol"""
+    state = await data_pipeline.get_market_state(symbol.upper())
+    
+    if not state:
+        raise HTTPException(status_code=404, detail=f"No data for {symbol}")
+    
+    return APIResponse(
+        success=True,
+        message="Market state retrieved",
+        data=state
+    )
+
+
+@app.get("/api/market-radar", response_model=MarketRadarResponse, tags=["Market Data"])
+async def get_market_radar():
+    """Get market radar data for all pairs"""
+    pairs = {}
+    top_signals = []
+    
+    # Get states for all pairs
+    for symbol in settings.trading_pairs:
+        state = await data_pipeline.get_market_state(symbol)
+        if state and 'current_price' in state:
+            pairs[symbol] = MarketState(**state)
+    
+    # Get top signals
+    all_signals = decision_engine.get_signal_cards()
+    top_signals = sorted(all_signals, key=lambda s: s.confidence, reverse=True)[:5]
+    
+    # Determine overall sentiment
+    signal_agg = signal_aggregator.aggregate_signals(
+        decision_engine.get_active_signals()
+    )
+    
+    # Get current session
+    hour = datetime.now(timezone.utc).hour
+    if 8 <= hour < 17:
+        session = "london"
+    elif 13 <= hour < 22:
+        session = "new_york"
+    elif 0 <= hour < 9:
+        session = "tokyo"
+    else:
+        session = "sydney"
+    
+    return MarketRadarResponse(
+        pairs={k: v for k, v in pairs.items()},
+        top_signals=top_signals,
+        market_sentiment=signal_agg.get('bias', 'NEUTRAL'),
+        active_session=session,
+        timestamp=datetime.now(timezone.utc)
+    )
+
+
+# ============== Signals ==============
+
+@app.post("/api/signals/generate", response_model=APIResponse, tags=["Signals"])
+async def generate_signal(request: SignalGenerateRequest):
+    """Generate a new trading signal"""
+    symbol = request.symbol.upper()
+    
+    # Get market data
+    tick = await data_pipeline.get_tick(symbol)
+    ohlcv = await data_pipeline.get_ohlcv(symbol, request.timeframe, 100)
+    market_state = await data_pipeline.get_market_state(symbol)
+    
+    if not tick or not ohlcv or not market_state:
+        raise HTTPException(status_code=400, detail="Insufficient market data. Is MT5 bridge running?")
+    
+    # Generate signal
+    signal = decision_engine.generate_signal(symbol, ohlcv, tick, market_state)
+    
+    if not signal:
+        return APIResponse(
+            success=False,
+            message="No valid signal generated (criteria not met)",
+            data=None
+        )
+    
+    return APIResponse(
+        success=True,
+        message="Signal generated successfully",
+        data=signal.dict()
+    )
+
+
+@app.get("/api/signals", response_model=SignalListResponse, tags=["Signals"])
+async def get_signals(
+    symbol: Optional[str] = None,
+    status: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100)
+):
+    """Get trading signals with optional filters"""
+    signals = decision_engine.get_active_signals(symbol)
+    
+    # Filter by status if provided
+    if status:
+        signals = [s for s in signals if s.status.value == status]
+    
+    # Sort by creation time (newest first)
+    signals = sorted(signals, key=lambda s: s.created_at, reverse=True)
+    
+    # Pagination
+    total = len(signals)
+    total_pages = (total + limit - 1) // limit
+    start = (page - 1) * limit
+    end = start + limit
+    
+    return SignalListResponse(
+        signals=signals[start:end],
+        count=total,
+        page=page,
+        total_pages=total_pages
+    )
+
+
+@app.get("/api/signals/cards", response_model=APIResponse, tags=["Signals"])
+async def get_signal_cards(symbol: Optional[str] = None):
+    """Get lightweight signal cards for dashboard"""
+    cards = decision_engine.get_signal_cards(symbol)
+    
+    return APIResponse(
+        success=True,
+        message=f"Retrieved {len(cards)} signal cards",
+        data=[c.dict() for c in cards]
+    )
+
+
+@app.get("/api/signals/{signal_id}", response_model=APIResponse, tags=["Signals"])
+async def get_signal(signal_id: str):
+    """Get a specific signal by ID"""
+    if signal_id not in decision_engine.active_signals:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    
+    signal = decision_engine.active_signals[signal_id]
+    
+    return APIResponse(
+        success=True,
+        message="Signal retrieved",
+        data=signal.dict()
+    )
+
+
+@app.delete("/api/signals/{signal_id}", response_model=APIResponse, tags=["Signals"])
+async def delete_signal(signal_id: str):
+    """Delete a signal"""
+    if signal_id not in decision_engine.active_signals:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    
+    del decision_engine.active_signals[signal_id]
+    
+    return APIResponse(
+        success=True,
+        message="Signal deleted",
+        data=None
+    )
+
+
+# ============== Risk Management ==============
+
+@app.get("/api/risk/failure-stats", response_model=APIResponse, tags=["Risk"])
+async def get_failure_stats(hours: int = Query(24, ge=1, le=168)):
+    """Get failure statistics"""
+    stats = risk_engine.get_failure_stats(hours)
+    
+    return APIResponse(
+        success=True,
+        message="Failure statistics retrieved",
+        data=stats
+    )
+
+
+@app.get("/api/risk/should-pause", response_model=APIResponse, tags=["Risk"])
+async def check_trading_pause():
+    """Check if trading should be paused"""
+    should_pause, reason = risk_engine.should_pause_trading()
+    
+    return APIResponse(
+        success=True,
+        message="Pause status checked",
+        data={
+            "should_pause": should_pause,
+            "reason": reason
+        }
+    )
+
+
+# ============== WebSocket for Real-time Updates ==============
+
+class ConnectionManager:
+    """Manage WebSocket connections"""
+    
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+    
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        logger.info(f"WebSocket connected. Total: {len(self.active_connections)}")
+    
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+        logger.info(f"WebSocket disconnected. Total: {len(self.active_connections)}")
+    
+    async def broadcast(self, message: dict):
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception as e:
+                logger.error(f"Broadcast error: {e}")
+
+
+manager = ConnectionManager()
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for real-time updates"""
+    await manager.connect(websocket)
+    
+    try:
+        # Send initial data
+        await websocket.send_json({
+            "type": "connected",
+            "message": "Connected to Forex Intelligence System (MT5)"
+        })
+        
+        while True:
+            # Wait for any message (ping/pong or commands)
+            data = await websocket.receive_text()
+            
+            if data == "ping":
+                await websocket.send_json({"type": "pong"})
+            
+            elif data == "get_signals":
+                signals = decision_engine.get_signal_cards()
+                await websocket.send_json({
+                    "type": "signals",
+                    "data": [s.dict() for s in signals]
+                })
+            
+            elif data == "get_ticks":
+                ticks = {}
+                for symbol in settings.trading_pairs:
+                    tick = await data_pipeline.get_tick(symbol)
+                    if tick:
+                        ticks[symbol] = tick.dict()
+                await websocket.send_json({
+                    "type": "ticks",
+                    "data": ticks
+                })
+            
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        manager.disconnect(websocket)
+
+
+async def broadcast_ticks():
+    """Broadcast ticks to all WebSocket clients"""
+    while True:
+        try:
+            ticks = {}
+            for symbol in settings.trading_pairs:
+                tick = await data_pipeline.get_tick(symbol)
+                if tick:
+                    ticks[symbol] = tick.dict()
+            
+            await manager.broadcast({
+                "type": "ticks",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "data": ticks
+            })
+            
+            await asyncio.sleep(1)  # Broadcast every second
+            
+        except Exception as e:
+            logger.error(f"Broadcast error: {e}")
+            await asyncio.sleep(5)
+
+
+# Run with: uvicorn app.api.routes:app --reload --host 0.0.0.0 --port 8000
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

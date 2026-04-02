@@ -1,0 +1,66 @@
+<!-- Confidence Meter Component -->
+<div class="space-y-4">
+    {% if signals %}
+    <!-- Average Confidence -->
+    <div>
+        <div class="flex justify-between text-sm mb-2">
+            <span class="text-gray-600 dark:text-gray-400">Average Confidence</span>
+            <span class="font-medium text-gray-900 dark:text-white">
+                {{ (signals | sum(attribute='confidence') / signals | length * 100) | round(0) }}%
+            </span>
+        </div>
+        <div class="relative h-4 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
+            <div class="absolute inset-0 confidence-meter opacity-30"></div>
+            <div class="absolute h-full bg-blue-500 rounded-full transition-all duration-500"
+                 style="width: {{ (signals | sum(attribute='confidence') / signals | length * 100) }}%"></div>
+        </div>
+    </div>
+    
+    <!-- Confidence Distribution -->
+    <div class="grid grid-cols-3 gap-2 text-center">
+        <div class="p-2 rounded bg-green-50 dark:bg-green-900/20">
+            <p class="text-lg font-bold text-green-600 dark:text-green-400">
+                {{ signals | selectattr('confidence', '>=', 0.8) | list | length }}
+            </p>
+            <p class="text-xs text-green-700 dark:text-green-300">High (80%+)</p>
+        </div>
+        <div class="p-2 rounded bg-yellow-50 dark:bg-yellow-900/20">
+            <p class="text-lg font-bold text-yellow-600 dark:text-yellow-400">
+                {{ signals | selectattr('confidence', '>=', 0.65) | selectattr('confidence', '<', 0.8) | list | length }}
+            </p>
+            <p class="text-xs text-yellow-700 dark:text-yellow-300">Medium</p>
+        </div>
+        <div class="p-2 rounded bg-red-50 dark:bg-red-900/20">
+            <p class="text-lg font-bold text-red-600 dark:text-red-400">
+                {{ signals | selectattr('confidence', '<', 0.65) | list | length }}
+            </p>
+            <p class="text-xs text-red-700 dark:text-red-300">Low</p>
+        </div>
+    </div>
+    
+    <!-- Bias Distribution -->
+    <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
+        <div class="flex items-center justify-between">
+            <div class="flex-1">
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-1">Buy Signals</p>
+                <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div class="h-full bg-green-500 rounded-full"
+                         style="width: {{ (signals | selectattr('bias', 'equalto', 'BUY') | list | length / signals | length * 100) if signals else 0 }}%"></div>
+                </div>
+            </div>
+            <div class="flex-1 ml-4">
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-1">Sell Signals</p>
+                <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div class="h-full bg-red-500 rounded-full"
+                         style="width: {{ (signals | selectattr('bias', 'equalto', 'SELL') | list | length / signals | length * 100) if signals else 0 }}%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    {% else %}
+    <div class="text-center py-6 text-gray-500 dark:text-gray-400">
+        <p>No signals to analyze</p>
+    </div>
+    {% endif %}
+</div>
