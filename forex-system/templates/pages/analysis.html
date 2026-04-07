@@ -1,0 +1,431 @@
+{% extends "base.html" %}
+
+{% block title %}{{ symbol }} Analysis - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div x-data="analysisApp('{{ symbol }}')" x-init="init()">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+        <div class="flex items-center space-x-4">
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white" x-text="symbol + ' Analysis'"></h1>
+            <span class="px-3 py-1 text-sm rounded-full"
+                  :class="marketState.trend === 'BUY' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'"
+                  x-text="marketState.trend"></span>
+        </div>
+        
+        <div class="flex items-center space-x-3">
+            <!-- Symbol Selector -->
+            <select x-model="symbol" @change="changeSymbol()" 
+                    class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                {% for pair in trading_pairs %}
+                <option value="{{ pair }}">{{ pair }}</option>
+                {% endfor %}
+            </select>
+            
+            <!-- Timeframe -->
+            <select x-model="timeframe" @change="loadChartData()"
+                    class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                <option value="M1">M1</option>
+                <option value="M5">M5</option>
+                <option value="M15" selected>M15</option>
+                <option value="M30">M30</option>
+                <option value="H1">H1</option>
+                <option value="H4">H4</option>
+            </select>
+        </div>
+    </div>
+    
+    <!-- Price Header -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
+        <div class="flex justify-between items-center">
+            <div>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Current Price</p>
+                <p class="text-3xl font-bold text-gray-900 dark:text-white" x-text="currentTick.bid?.toFixed(5) || '---'"></p>
+            </div>
+            <div class="text-right">
+                <p class="text-sm text-gray-500 dark:text-gray-400">Spread</p>
+                <p class="text-lg font-semibold" 
+                   :class="parseFloat(currentTick.spread) > 2 ? 'text-red-500' : 'text-gray-900 dark:text-white'"
+                   x-text="currentTick.spread + ' pips'"></p>
+            </div>
+            <div class="text-right">
+                <p class="text-sm text-gray-500 dark:text-gray-400">Volatility</p>
+                <p class="text-lg font-semibold text-gray-900 dark:text-white" x-text="(marketState.volatility_pct * 100).toFixed(3) + '%'"></p>
+            </div>
+            <div class="text-right">
+                <p class="text-sm text-gray-500 dark:text-gray-400">Session</p>
+                <p class="text-lg font-semibold capitalize text-gray-900 dark:text-white" x-text="marketState.session"></p>
+            </div>
+            <div class="text-right">
+                <p class="text-sm text-gray-500 dark:text-gray-400">Momentum</p>
+                <p class="text-lg font-semibold"
+                   :class="marketState.momentum > 0 ? 'text-green-500' : 'text-red-500'"
+                   x-text="(marketState.momentum >= 0 ? '+' : '') + marketState.momentum?.toFixed(3) + '%'"></p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Charts Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main Chart -->
+        <div class="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Price Chart</h2>
+                <div class="flex items-center space-x-2">
+                    <button @click="chartType = 'candlestick'; updateMainChart()" 
+                            class="px-3 py-1 text-sm rounded"
+                            :class="chartType === 'candlestick' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'">
+                        Candlestick
+                    </button>
+                    <button @click="chartType = 'line'; updateMainChart()"
+                            class="px-3 py-1 text-sm rounded"
+                            :class="chartType === 'line' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'">
+                        Line
+                    </button>
+                </div>
+            </div>
+            <div class="p-4">
+                <div id="price-chart" class="h-96"></div>
+            </div>
+        </div>
+        
+        <!-- Right Column -->
+        <div class="space-y-6">
+            <!-- Probability Gauge -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Direction Probability</h2>
+                </div>
+                <div class="p-4">
+                    <div id="probability-gauge" class="h-48"></div>
+                </div>
+            </div>
+            
+            <!-- Duration Prediction -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Duration Prediction</h2>
+                </div>
+                <div class="p-4">
+                    <div id="duration-gauge" class="h-48"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Signal Generation -->
+    <div class="mt-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+        <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Generate Signal</h2>
+            <button @click="generateSignal()" :disabled="generating"
+                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg disabled:opacity-50 flex items-center space-x-2">
+                <svg x-show="!generating" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                </svg>
+                <svg x-show="generating" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                <span x-text="generating ? 'Generating...' : 'Generate Signal'"></span>
+            </button>
+        </div>
+        <div class="p-4">
+            <!-- Last Generated Signal -->
+            <div x-show="lastSignal" class="rounded-lg border p-4 mb-4"
+                 :class="lastSignal?.bias === 'BUY' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-red-500 bg-red-50 dark:bg-red-900/20'">
+                <div class="flex justify-between items-center mb-3">
+                    <div class="flex items-center space-x-3">
+                        <span class="px-3 py-1 text-sm font-semibold rounded"
+                              :class="lastSignal?.bias === 'BUY' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'"
+                              x-text="lastSignal?.bias"></span>
+                        <span class="font-bold text-gray-900 dark:text-white" x-text="lastSignal?.symbol"></span>
+                    </div>
+                    <span class="text-sm text-gray-500" x-text="formatTime(lastSignal?.created_at)"></span>
+                </div>
+                <div class="grid grid-cols-4 gap-4 text-sm">
+                    <div>
+                        <p class="text-gray-500 dark:text-gray-400">Entry Zone</p>
+                        <p class="font-medium text-gray-900 dark:text-white" x-text="lastSignal?.entry_zone"></p>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 dark:text-gray-400">Confidence</p>
+                        <p class="font-medium text-gray-900 dark:text-white" x-text="(lastSignal?.confidence * 100).toFixed(0) + '%'"></p>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 dark:text-gray-400">Duration</p>
+                        <p class="font-medium text-gray-900 dark:text-white" x-text="lastSignal?.expected_duration"></p>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 dark:text-gray-400">Status</p>
+                        <p class="font-medium" :style="'color: ' + lastSignal?.status_color" x-text="lastSignal?.status?.toUpperCase()"></p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- No Signal State -->
+            <div x-show="!lastSignal" class="text-center py-8 text-gray-500 dark:text-gray-400">
+                <p>Click "Generate Signal" to analyze and create a new trading signal</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function analysisApp(initialSymbol) {
+    return {
+        symbol: initialSymbol,
+        timeframe: 'M15',
+        chartType: 'candlestick',
+        currentTick: {},
+        marketState: {},
+        ohlcvData: [],
+        lastSignal: null,
+        generating: false,
+        priceChart: null,
+        probGauge: null,
+        durationGauge: null,
+        
+        init() {
+            this.loadMarketData();
+            this.loadChartData();
+            this.initCharts();
+            
+            // Auto refresh
+            setInterval(() => {
+                this.loadMarketData();
+            }, 3000);
+            
+            setInterval(() => {
+                this.loadChartData();
+            }, 15000);
+        },
+        
+        async loadMarketData() {
+            try {
+                const [tickRes, stateRes] = await Promise.all([
+                    fetch(`/api/tick/${this.symbol}`),
+                    fetch(`/api/market-state/${this.symbol}`)
+                ]);
+                
+                const tickData = await tickRes.json();
+                const stateData = await stateRes.json();
+                
+                if (tickData.success) this.currentTick = tickData.data;
+                if (stateData.success) this.marketState = stateData.data;
+                
+                this.updateGauges();
+            } catch (error) {
+                console.error('Error loading market data:', error);
+            }
+        },
+        
+        async loadChartData() {
+            try {
+                const response = await fetch(`/api/ohlcv/${this.symbol}?timeframe=${this.timeframe}&count=100`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.ohlcvData = data.data;
+                    this.updateMainChart();
+                }
+            } catch (error) {
+                console.error('Error loading chart data:', error);
+            }
+        },
+        
+        initCharts() {
+            this.priceChart = echarts.init(document.getElementById('price-chart'));
+            this.probGauge = echarts.init(document.getElementById('probability-gauge'));
+            this.durationGauge = echarts.init(document.getElementById('duration-gauge'));
+            
+            window.addEventListener('resize', () => {
+                this.priceChart?.resize();
+                this.probGauge?.resize();
+                this.durationGauge?.resize();
+            });
+        },
+        
+        updateMainChart() {
+            if (!this.priceChart || !this.ohlcvData.length) return;
+            
+            const data = this.ohlcvData;
+            const dates = data.map(d => new Date(d.timestamp).toLocaleTimeString());
+            
+            let series;
+            if (this.chartType === 'candlestick') {
+                series = [{
+                    type: 'candlestick',
+                    data: data.map(d => [d.open, d.close, d.low, d.high]),
+                    itemStyle: {
+                        color: '#10B981',
+                        color0: '#EF4444',
+                        borderColor: '#10B981',
+                        borderColor0: '#EF4444'
+                    }
+                }];
+            } else {
+                series = [{
+                    type: 'line',
+                    data: data.map(d => d.close),
+                    smooth: true,
+                    lineStyle: { color: '#3B82F6', width: 2 },
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
+                            { offset: 1, color: 'rgba(59, 130, 246, 0.05)' }
+                        ])
+                    }
+                }];
+            }
+            
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'cross' }
+                },
+                xAxis: {
+                    type: 'category',
+                    data: dates,
+                    axisLabel: { color: '#9CA3AF', fontSize: 10 },
+                    axisLine: { lineStyle: { color: '#374151' } }
+                },
+                yAxis: {
+                    type: 'value',
+                    scale: true,
+                    axisLabel: { color: '#9CA3AF', formatter: '{value}' },
+                    splitLine: { lineStyle: { color: '#374151', type: 'dashed' } }
+                },
+                grid: {
+                    left: '10%',
+                    right: '5%',
+                    top: '5%',
+                    bottom: '15%'
+                },
+                series: series
+            };
+            
+            this.priceChart.setOption(option);
+        },
+        
+        updateGauges() {
+            // Probability Gauge
+            const probUp = this.lastSignal?.probability_hold_above || 0.5;
+            const probDown = this.lastSignal?.probability_hold_below || 0.5;
+            
+            if (this.probGauge) {
+                this.probGauge.setOption({
+                    backgroundColor: 'transparent',
+                    series: [{
+                        type: 'gauge',
+                        startAngle: 180,
+                        endAngle: 0,
+                        min: 0,
+                        max: 100,
+                        splitNumber: 4,
+                        axisLine: {
+                            lineStyle: {
+                                width: 20,
+                                color: [
+                                    [0.3, '#EF4444'],
+                                    [0.5, '#F59E0B'],
+                                    [0.7, '#10B981'],
+                                    [1, '#3B82F6']
+                                ]
+                            }
+                        },
+                        pointer: { width: 5 },
+                        axisTick: { show: false },
+                        splitLine: { length: 15, lineStyle: { color: 'auto', width: 2 } },
+                        axisLabel: { color: '#9CA3AF', fontSize: 10, distance: -40 },
+                        detail: {
+                            valueAnimation: true,
+                            formatter: '{value}%',
+                            color: '#E5E7EB',
+                            fontSize: 18,
+                            offsetCenter: [0, '70%']
+                        },
+                        data: [{ value: Math.round(probUp * 100), name: 'UP Probability' }]
+                    }]
+                });
+            }
+            
+            // Duration Gauge
+            const duration = parseFloat(this.lastSignal?.expected_duration) || 10;
+            
+            if (this.durationGauge) {
+                this.durationGauge.setOption({
+                    backgroundColor: 'transparent',
+                    series: [{
+                        type: 'gauge',
+                        startAngle: 200,
+                        endAngle: -20,
+                        min: 0,
+                        max: 60,
+                        splitNumber: 6,
+                        axisLine: {
+                            lineStyle: {
+                                width: 15,
+                                color: [
+                                    [0.25, '#10B981'],
+                                    [0.5, '#F59E0B'],
+                                    [1, '#EF4444']
+                                ]
+                            }
+                        },
+                        pointer: { width: 4 },
+                        axisTick: { show: false },
+                        splitLine: { length: 10, lineStyle: { color: 'auto' } },
+                        axisLabel: { color: '#9CA3AF', fontSize: 10, distance: -35 },
+                        detail: {
+                            valueAnimation: true,
+                            formatter: '{value} min',
+                            color: '#E5E7EB',
+                            fontSize: 16,
+                            offsetCenter: [0, '70%']
+                        },
+                        data: [{ value: Math.round(duration), name: 'Expected Duration' }]
+                    }]
+                });
+            }
+        },
+        
+        async generateSignal() {
+            this.generating = true;
+            try {
+                const response = await fetch('/api/signals/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ symbol: this.symbol, timeframe: this.timeframe })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.lastSignal = data.data;
+                    this.updateGauges();
+                } else {
+                    alert(data.message || 'No signal generated - criteria not met');
+                }
+            } catch (error) {
+                console.error('Error generating signal:', error);
+                alert('Error generating signal');
+            } finally {
+                this.generating = false;
+            }
+        },
+        
+        changeSymbol() {
+            this.loadMarketData();
+            this.loadChartData();
+            this.lastSignal = null;
+        },
+        
+        formatTime(timestamp) {
+            if (!timestamp) return '';
+            return new Date(timestamp).toLocaleTimeString();
+        }
+    };
+}
+</script>
+{% endblock %}

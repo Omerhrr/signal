@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div x-data="settingsApp()" x-init="init()">
+    <!-- Header -->
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Settings</h1>
+        <p class="text-gray-600 dark:text-gray-400 mt-1">Configure system parameters and risk settings</p>
+    </div>
+    
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Risk Management -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Risk Management</h2>
+            </div>
+            <div class="p-4 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Max Risk Per Trade
+                    </label>
+                    <div class="flex items-center space-x-3">
+                        <input type="range" x-model="settings.maxRiskPerTrade" min="0.5" max="5" step="0.5" 
+                               class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                        <span class="text-sm font-medium text-gray-900 dark:text-white w-12" x-text="settings.maxRiskPerTrade + '%'"></span>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Min Confidence Threshold
+                    </label>
+                    <div class="flex items-center space-x-3">
+                        <input type="range" x-model="settings.minConfidence" min="0.5" max="0.9" step="0.05" 
+                               class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                        <span class="text-sm font-medium text-gray-900 dark:text-white w-12" x-text="(settings.minConfidence * 100).toFixed(0) + '%'"></span>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Max Spread (pips)
+                    </label>
+                    <div class="flex items-center space-x-3">
+                        <input type="range" x-model="settings.maxSpread" min="1" max="5" step="0.5" 
+                               class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                        <span class="text-sm font-medium text-gray-900 dark:text-white w-12" x-text="settings.maxSpread + ' pips'"></span>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Instant Failure Threshold (pips)
+                    </label>
+                    <div class="flex items-center space-x-3">
+                        <input type="range" x-model="settings.instantFailurePips" min="5" max="30" step="1" 
+                               class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                        <span class="text-sm font-medium text-gray-900 dark:text-white w-12" x-text="settings.instantFailurePips + ' pips'"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Signal Settings -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Signal Settings</h2>
+            </div>
+            <div class="p-4 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Signal Expiry (minutes)
+                    </label>
+                    <div class="flex items-center space-x-3">
+                        <input type="range" x-model="settings.signalExpiry" min="5" max="60" step="5" 
+                               class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                        <span class="text-sm font-medium text-gray-900 dark:text-white w-12" x-text="settings.signalExpiry + ' min'"></span>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Slow Failure Timeout (minutes)
+                    </label>
+                    <div class="flex items-center space-x-3">
+                        <input type="range" x-model="settings.slowFailureMinutes" min="10" max="60" step="5" 
+                               class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                        <span class="text-sm font-medium text-gray-900 dark:text-white w-12" x-text="settings.slowFailureMinutes + ' min'"></span>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Volatility Spike Threshold
+                    </label>
+                    <div class="flex items-center space-x-3">
+                        <input type="range" x-model="settings.volatilitySpike" min="1" max="5" step="0.5" 
+                               class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                        <span class="text-sm font-medium text-gray-900 dark:text-white w-12" x-text="settings.volatilitySpike.toFixed(1)"></span>
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Auto-generate signals</span>
+                    <button @click="settings.autoGenerate = !settings.autoGenerate"
+                            class="relative w-11 h-6 rounded-full transition-colors"
+                            :class="settings.autoGenerate ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'">
+                        <span class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full transition-transform"
+                              :class="settings.autoGenerate ? 'translate-x-5' : ''"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Trading Pairs -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Trading Pairs</h2>
+            </div>
+            <div class="p-4">
+                <div class="space-y-2">
+                    <template x-for="pair in tradingPairs" :key="pair">
+                        <div class="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <div class="flex items-center space-x-3">
+                                <input type="checkbox" x-model="pair.enabled" 
+                                       class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                <span class="font-medium text-gray-900 dark:text-white" x-text="pair.symbol"></span>
+                            </div>
+                            <span class="text-sm text-gray-500" x-text="pair.session"></span>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+        
+        <!-- System Info -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">System Information</h2>
+            </div>
+            <div class="p-4 space-y-3">
+                <div class="flex justify-between">
+                    <span class="text-gray-500 dark:text-gray-400">Version</span>
+                    <span class="text-gray-900 dark:text-white font-medium">1.0.0</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-500 dark:text-gray-400">Model Version</span>
+                    <span class="text-gray-900 dark:text-white font-medium" x-text="modelVersion">--</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-500 dark:text-gray-400">Data Pipeline</span>
+                    <span class="text-green-500 font-medium">Active (Simulated)</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-500 dark:text-gray-400">Last Retraining</span>
+                    <span class="text-gray-900 dark:text-white font-medium" x-text="lastRetraining">--</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-500 dark:text-gray-400">Total Signals Generated</span>
+                    <span class="text-gray-900 dark:text-white font-medium" x-text="totalSignals">--</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Save Button -->
+    <div class="mt-6 flex justify-end space-x-3">
+        <button @click="resetSettings()" 
+                class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+            Reset to Defaults
+        </button>
+        <button @click="saveSettings()" 
+                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center space-x-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span>Save Settings</span>
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function settingsApp() {
+    return {
+        settings: {
+            maxRiskPerTrade: 2,
+            minConfidence: 0.65,
+            maxSpread: 3,
+            instantFailurePips: 15,
+            signalExpiry: 30,
+            slowFailureMinutes: 20,
+            volatilitySpike: 3,
+            autoGenerate: false
+        },
+        tradingPairs: [
+            { symbol: 'EURUSD', session: 'London/NY', enabled: true },
+            { symbol: 'GBPUSD', session: 'London/NY', enabled: true },
+            { symbol: 'USDJPY', session: 'Tokyo/London', enabled: true },
+            { symbol: 'XAUUSD', session: 'All Sessions', enabled: true }
+        ],
+        modelVersion: 'v1.0.0',
+        lastRetraining: 'Never',
+        totalSignals: 0,
+        
+        init() {
+            this.loadSettings();
+            this.loadStats();
+        },
+        
+        loadSettings() {
+            const saved = localStorage.getItem('forex_settings');
+            if (saved) {
+                try {
+                    this.settings = { ...this.settings, ...JSON.parse(saved) };
+                } catch (e) {
+                    console.error('Error loading settings:', e);
+                }
+            }
+        },
+        
+        async loadStats() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                this.totalSignals = data.active_signals || 0;
+            } catch (e) {
+                console.error('Error loading stats:', e);
+            }
+        },
+        
+        saveSettings() {
+            localStorage.setItem('forex_settings', JSON.stringify(this.settings));
+            alert('Settings saved successfully!');
+        },
+        
+        resetSettings() {
+            this.settings = {
+                maxRiskPerTrade: 2,
+                minConfidence: 0.65,
+                maxSpread: 3,
+                instantFailurePips: 15,
+                signalExpiry: 30,
+                slowFailureMinutes: 20,
+                volatilitySpike: 3,
+                autoGenerate: false
+            };
+            localStorage.removeItem('forex_settings');
+            alert('Settings reset to defaults');
+        }
+    };
+}
+</script>
+{% endblock %}

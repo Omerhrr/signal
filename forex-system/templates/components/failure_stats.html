@@ -1,0 +1,66 @@
+<!-- Failure Stats Component -->
+<div class="space-y-4">
+    {% if stats and stats.total_failures > 0 %}
+    
+    <!-- Total Failures -->
+    <div class="flex items-center justify-between p-3 rounded-lg bg-red-50 dark:bg-red-900/20">
+        <span class="text-sm font-medium text-red-700 dark:text-red-300">Total Failures (24h)</span>
+        <span class="text-xl font-bold text-red-600 dark:text-red-400">{{ stats.total_failures }}</span>
+    </div>
+    
+    <!-- Failure by Type -->
+    {% if stats.by_type %}
+    <div class="space-y-2">
+        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">By Type</h4>
+        {% for type, count in stats.by_type.items() %}
+        <div class="flex items-center justify-between">
+            <span class="text-sm text-gray-600 dark:text-gray-400 capitalize">{{ type.replace('_', ' ') }}</span>
+            <span class="text-sm font-medium text-gray-900 dark:text-white">{{ count }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    <!-- Failure by Severity -->
+    {% if stats.by_severity %}
+    <div class="space-y-2">
+        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">By Severity</h4>
+        <div class="grid grid-cols-4 gap-2">
+            {% for severity in ['critical', 'high', 'medium', 'low'] %}
+            <div class="text-center p-2 rounded
+                        {% if severity == 'critical' %}bg-red-100 dark:bg-red-900/30
+                        {% elif severity == 'high' %}bg-orange-100 dark:bg-orange-900/30
+                        {% elif severity == 'medium' %}bg-yellow-100 dark:bg-yellow-900/30
+                        {% else %}bg-gray-100 dark:bg-gray-700{% endif %}">
+                <p class="text-lg font-bold {{ 'text-' + ('red' if severity == 'critical' else 'orange' if severity == 'high' else 'yellow' if severity == 'medium' else 'gray') + '-600 dark:text-' + ('red' if severity == 'critical' else 'orange' if severity == 'high' else 'yellow' if severity == 'medium' else 'gray') + '-400' }}">
+                    {{ stats.by_severity.get(severity, 0) }}
+                </p>
+                <p class="text-xs {{ 'text-' + ('red' if severity == 'critical' else 'orange' if severity == 'high' else 'yellow' if severity == 'medium' else 'gray') + '-700 dark:text-' + ('red' if severity == 'critical' else 'orange' if severity == 'high' else 'yellow' if severity == 'medium' else 'gray') + '-300' }} capitalize">
+                    {{ severity }}
+                </p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Most Common -->
+    {% if stats.most_common %}
+    <div class="flex items-center justify-between p-2 rounded bg-gray-50 dark:bg-gray-700/50">
+        <span class="text-sm text-gray-600 dark:text-gray-400">Most Common</span>
+        <span class="text-sm font-medium text-gray-900 dark:text-white capitalize">{{ stats.most_common.replace('_', ' ') }}</span>
+    </div>
+    {% endif %}
+    
+    {% else %}
+    <div class="text-center py-6">
+        <div class="w-16 h-16 mx-auto mb-3 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+            <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+        </div>
+        <p class="text-green-600 dark:text-green-400 font-medium">No failures detected</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">System running smoothly</p>
+    </div>
+    {% endif %}
+</div>

@@ -1,0 +1,33 @@
+<!-- Tick Table Component -->
+<div class="overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead>
+            <tr class="text-left text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+                <th class="pb-2 font-medium">Symbol</th>
+                <th class="pb-2 font-medium">Bid</th>
+                <th class="pb-2 font-medium">Ask</th>
+                <th class="pb-2 font-medium">Spread</th>
+                <th class="pb-2 font-medium">Time</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+            {% for symbol, tick in ticks.items() %}
+            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                <td class="py-2 font-medium text-gray-900 dark:text-white">{{ symbol }}</td>
+                <td class="py-2 text-gray-700 dark:text-gray-300">{{ "%.5f"|format(tick.bid) }}</td>
+                <td class="py-2 text-gray-700 dark:text-gray-300">{{ "%.5f"|format(tick.ask) }}</td>
+                <td class="py-2 {{ 'text-red-500' if tick.spread > 2 else 'text-gray-600 dark:text-gray-400' }}">
+                    {{ tick.spread }} pips
+                </td>
+                <td class="py-2 text-gray-500 dark:text-gray-500">{{ tick.timestamp|datetime_format }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="py-4 text-center text-gray-500 dark:text-gray-400">
+                    No tick data available
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

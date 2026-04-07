@@ -1,0 +1,62 @@
+<!-- Market Radar Component -->
+<div class="space-y-3">
+    {% if radar %}
+    <!-- Market Sentiment -->
+    <div class="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50">
+        <span class="text-sm text-gray-600 dark:text-gray-400">Market Sentiment</span>
+        <span class="font-semibold
+                    {% if radar.market_sentiment == 'BULLISH' %}text-green-600 dark:text-green-400
+                    {% elif radar.market_sentiment == 'BEARISH' %}text-red-600 dark:text-red-400
+                    {% else %}text-gray-600 dark:text-gray-400{% endif %}">
+            {{ radar.market_sentiment }}
+        </span>
+    </div>
+    
+    <!-- Trading Pairs -->
+    {% for symbol, state in radar.pairs.items() %}
+    <div class="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50">
+        <div class="flex items-center space-x-3">
+            <span class="font-medium text-gray-900 dark:text-white">{{ symbol }}</span>
+            <span class="px-2 py-0.5 text-xs rounded
+                        {% if state.trend == 'BUY' %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400
+                        {% else %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400{% endif %}">
+                {{ state.trend }}
+            </span>
+        </div>
+        <div class="text-right">
+            <p class="font-medium text-gray-900 dark:text-white">{{ "%.5f"|format(state.current_price) }}</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">{{ state.spread }} pips</p>
+        </div>
+    </div>
+    {% endfor %}
+    
+    <!-- Active Session -->
+    <div class="flex items-center justify-between p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+        <span class="text-sm text-blue-700 dark:text-blue-300">Active Session</span>
+        <span class="font-semibold text-blue-700 dark:text-blue-300 capitalize">{{ radar.active_session }}</span>
+    </div>
+    
+    <!-- Top Signals -->
+    {% if radar.top_signals %}
+    <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Top Signals</h4>
+        <div class="space-y-2">
+            {% for signal in radar.top_signals[:3] %}
+            <div class="flex items-center justify-between text-sm">
+                <div class="flex items-center space-x-2">
+                    <span class="font-medium {{ 'text-green-600' if signal.bias == 'BUY' else 'text-red-600' }}">{{ signal.symbol }}</span>
+                    <span class="text-xs {{ 'text-green-500' if signal.bias == 'BUY' else 'text-red-500' }}">{{ signal.bias }}</span>
+                </div>
+                <span class="text-gray-600 dark:text-gray-400">{{ (signal.confidence * 100) | round(0) }}%</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    
+    {% else %}
+    <div class="text-center py-4 text-gray-500 dark:text-gray-400">
+        <p>Loading market data...</p>
+    </div>
+    {% endif %}
+</div>
