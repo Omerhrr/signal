@@ -110,10 +110,21 @@ def signals():
     return render_template('pages/signals.html')
 
 
+@app.route('/analysis/')
 @app.route('/analysis/<symbol>')
-def analysis(symbol):
+def analysis(symbol=None):
     """Analysis page for specific symbol"""
-    return render_template('pages/analysis.html', symbol=symbol.upper())
+    # Symbol can come from URL path or query parameter
+    # Query parameter takes precedence
+    query_symbol = request.args.get('symbol')
+    if query_symbol:
+        symbol = query_symbol.upper()
+    elif symbol:
+        symbol = symbol.upper()
+    else:
+        symbol = settings.default_pair
+        
+    return render_template('pages/analysis.html', symbol=symbol)
 
 
 @app.route('/settings')

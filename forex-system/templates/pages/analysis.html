@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}{{ symbol }} Analysis - {{ app_name }}{% endblock %}
+{% block title %}Analysis - {{ app_name }}{% endblock %}
 
 {% block content %}
-<div x-data="analysisApp('{{ symbol }}')" x-init="init()">
+<div x-data="analysisApp()" x-init="init()">
     <!-- Header -->
     <div class="flex justify-between items-center mb-6">
         <div class="flex items-center space-x-4">
@@ -15,7 +15,7 @@
         
         <div class="flex items-center space-x-3">
             <!-- Symbol Selector -->
-            <select x-model="symbol" @change="changeSymbol()" 
+            <select x-model="symbol" @change="onSymbolChange()" 
                     class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
                 {% for pair in trading_pairs %}
                 <option value="{{ pair }}">{{ pair }}</option>
@@ -23,14 +23,15 @@
             </select>
             
             <!-- Timeframe -->
-            <select x-model="timeframe" @change="loadChartData()"
+            <select x-model="timeframe" @change="onTimeframeChange()"
                     class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
                 <option value="M1">M1</option>
                 <option value="M5">M5</option>
-                <option value="M15" selected>M15</option>
+                <option value="M15">M15</option>
                 <option value="M30">M30</option>
                 <option value="H1">H1</option>
                 <option value="H4">H4</option>
+                <option value="D1">D1</option>
             </select>
         </div>
     </div>
@@ -113,6 +114,103 @@
         </div>
     </div>
     
+    <!-- HMM Regime & MCMC Analysis -->
+    <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- HMM Regime Detection -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">HMM Market Regime</h2>
+            </div>
+            <div class="p-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Current Regime</p>
+                        <p class="text-xl font-bold" 
+                           :class="getRegimeClass(hmmAnalysis.current_state?.regime)"
+                           x-text="hmmAnalysis.current_state?.regime?.replace('_', ' ') || 'Unknown'"></p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Probability</p>
+                        <p class="text-xl font-bold text-gray-900 dark:text-white" 
+                           x-text="(hmmAnalysis.current_state?.probability * 100 || 0).toFixed(0) + '%'"></p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Confidence</p>
+                        <p class="text-xl font-bold text-gray-900 dark:text-white" 
+                           x-text="(hmmAnalysis.current_state?.confidence * 100 || 0).toFixed(0) + '%'"></p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Expected Duration</p>
+                        <p class="text-xl font-bold text-gray-900 dark:text-white" 
+                           x-text="hmmAnalysis.current_state?.duration_expected?.toFixed(0) + ' bars' || '---'"></p>
+                    </div>
+                </div>
+                <!-- Transition Probabilities -->
+                <div class="mt-4">
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">Next Regime Probabilities</p>
+                    <div class="space-y-2">
+                        <template x-for="(prob, regime) in hmmAnalysis.current_state?.transition_probabilities" :key="regime">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm capitalize" x-text="regime.replace('_', ' ')"></span>
+                                <div class="flex items-center space-x-2 flex-1 ml-4">
+                                    <div class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                        <div class="h-full bg-blue-500 rounded-full" :style="'width: ' + (prob * 100) + '%'"></div>
+                                    </div>
+                                    <span class="text-xs text-gray-500 w-12 text-right" x-text="(prob * 100).toFixed(0) + '%'"></span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- MCMC Probability -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">MCMC Probability Estimate</h2>
+            </div>
+            <div class="p-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Direction Probability</p>
+                        <p class="text-xl font-bold" 
+                           :class="mcmcAnalysis.direction_probability?.mean >= 0.5 ? 'text-green-600' : 'text-red-600'"
+                           x-text="(mcmcAnalysis.direction_probability?.mean * 100 || 50).toFixed(0) + '%'"></p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Uncertainty</p>
+                        <p class="text-xl font-bold text-gray-900 dark:text-white" 
+                           x-text="(mcmcAnalysis.direction_probability?.uncertainty * 100 || 0).toFixed(0) + '%'"></p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">95% CI</p>
+                        <p class="text-sm font-medium text-gray-900 dark:text-white">
+                            <span x-text="((mcmcAnalysis.direction_probability?.ci_95 || [0.3, 0.7])[0] * 100).toFixed(0)"></span>% - 
+                            <span x-text="((mcmcAnalysis.direction_probability?.ci_95 || [0.3, 0.7])[1] * 100).toFixed(0)"></span>%
+                        </p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Confidence Score</p>
+                        <p class="text-xl font-bold text-gray-900 dark:text-white" 
+                           x-text="(mcmcAnalysis.confidence_score * 100 || 0).toFixed(0) + '%'"></p>
+                    </div>
+                </div>
+                <!-- Quality Indicators -->
+                <div class="mt-4 grid grid-cols-2 gap-3">
+                    <div class="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Effective Sample Size</p>
+                        <p class="text-lg font-bold text-gray-900 dark:text-white" x-text="mcmcAnalysis.effective_sample_size || '---'"></p>
+                    </div>
+                    <div class="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Convergence</p>
+                        <p class="text-lg font-bold text-gray-900 dark:text-white" x-text="(mcmcAnalysis.convergence_metric * 100 || 0).toFixed(0) + '%'"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <!-- Signal Generation -->
     <div class="mt-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
         <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
@@ -172,9 +270,9 @@
 
 {% block extra_scripts %}
 <script>
-function analysisApp(initialSymbol) {
+function analysisApp() {
     return {
-        symbol: initialSymbol,
+        symbol: 'EURUSD',
         timeframe: 'M15',
         chartType: 'candlestick',
         currentTick: {},
@@ -185,10 +283,24 @@ function analysisApp(initialSymbol) {
         priceChart: null,
         probGauge: null,
         durationGauge: null,
+        hmmAnalysis: {},
+        mcmcAnalysis: {},
+        
+        // Available trading pairs from template
+        availableSymbols: {{ trading_pairs | tojson }},
         
         init() {
+            // Load from URL parameters first
+            this.loadFromURL();
+            
+            // Set up URL change listener for browser back/forward
+            window.addEventListener('popstate', () => this.loadFromURL());
+            
+            // Load data
             this.loadMarketData();
             this.loadChartData();
+            this.loadHMMAnalysis();
+            this.loadMCMCAnalysis();
             this.initCharts();
             
             // Auto refresh
@@ -198,7 +310,58 @@ function analysisApp(initialSymbol) {
             
             setInterval(() => {
                 this.loadChartData();
+                this.loadHMMAnalysis();
+                this.loadMCMCAnalysis();
             }, 15000);
+        },
+        
+        loadFromURL() {
+            const params = new URLSearchParams(window.location.search);
+            const urlSymbol = params.get('symbol');
+            const urlTimeframe = params.get('timeframe');
+            
+            // Validate and set symbol
+            if (urlSymbol && this.availableSymbols.includes(urlSymbol.toUpperCase())) {
+                this.symbol = urlSymbol.toUpperCase();
+            } else if (this.availableSymbols.length > 0) {
+                this.symbol = this.availableSymbols[0];
+            }
+            
+            // Validate and set timeframe
+            const validTimeframes = ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1'];
+            if (urlTimeframe && validTimeframes.includes(urlTimeframe.toUpperCase())) {
+                this.timeframe = urlTimeframe.toUpperCase();
+            }
+            
+            // Update page title
+            document.title = `${this.symbol} Analysis - {{ app_name }}`;
+        },
+        
+        updateURL() {
+            const params = new URLSearchParams();
+            params.set('symbol', this.symbol);
+            params.set('timeframe', this.timeframe);
+            
+            // Update URL without reloading
+            const newURL = `${window.location.pathname}?${params.toString()}`;
+            window.history.pushState({ symbol: this.symbol, timeframe: this.timeframe }, '', newURL);
+            
+            // Update page title
+            document.title = `${this.symbol} Analysis - {{ app_name }}`;
+        },
+        
+        onSymbolChange() {
+            this.updateURL();
+            this.loadMarketData();
+            this.loadChartData();
+            this.loadHMMAnalysis();
+            this.loadMCMCAnalysis();
+            this.lastSignal = null;
+        },
+        
+        onTimeframeChange() {
+            this.updateURL();
+            this.loadChartData();
         },
         
         async loadMarketData() {
@@ -231,6 +394,24 @@ function analysisApp(initialSymbol) {
                 }
             } catch (error) {
                 console.error('Error loading chart data:', error);
+            }
+        },
+        
+        async loadHMMAnalysis() {
+            try {
+                const response = await fetch(`/api/hmm/regime?symbol=${this.symbol}`);
+                this.hmmAnalysis = await response.json();
+            } catch (error) {
+                console.error('Error loading HMM analysis:', error);
+            }
+        },
+        
+        async loadMCMCAnalysis() {
+            try {
+                const response = await fetch(`/api/mcmc/estimate?symbol=${this.symbol}`);
+                this.mcmcAnalysis = await response.json();
+            } catch (error) {
+                console.error('Error loading MCMC analysis:', error);
             }
         },
         
@@ -312,7 +493,6 @@ function analysisApp(initialSymbol) {
         updateGauges() {
             // Probability Gauge
             const probUp = this.lastSignal?.probability_hold_above || 0.5;
-            const probDown = this.lastSignal?.probability_hold_below || 0.5;
             
             if (this.probGauge) {
                 this.probGauge.setOption({
@@ -415,10 +595,14 @@ function analysisApp(initialSymbol) {
             }
         },
         
-        changeSymbol() {
-            this.loadMarketData();
-            this.loadChartData();
-            this.lastSignal = null;
+        getRegimeClass(regime) {
+            if (!regime) return 'text-gray-500';
+            const regimeLower = regime.toLowerCase();
+            if (regimeLower.includes('up') || regimeLower.includes('bull')) return 'text-green-600';
+            if (regimeLower.includes('down') || regimeLower.includes('bear')) return 'text-red-600';
+            if (regimeLower.includes('volatile')) return 'text-orange-600';
+            if (regimeLower.includes('breakout')) return 'text-purple-600';
+            return 'text-gray-600';
         },
         
         formatTime(timestamp) {
