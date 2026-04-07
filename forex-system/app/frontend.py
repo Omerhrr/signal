@@ -384,6 +384,35 @@ def api_scanner_config():
     return jsonify(result)
 
 
+# ============== Volume API Routes ==============
+
+@app.route('/api/volume/analyze')
+def api_volume_analyze():
+    """Get volume analysis"""
+    symbol = request.args.get('symbol', 'EURUSD')
+    timeframe = request.args.get('timeframe', 'M15')
+    result = run_async(fetch_api(f"/api/volume/analyze?symbol={symbol}&timeframe={timeframe}"))
+    return jsonify(result)
+
+
+@app.route('/api/volume/predict')
+def api_volume_predict():
+    """Get volume prediction"""
+    symbol = request.args.get('symbol', 'EURUSD')
+    timeframe = request.args.get('timeframe', 'M15')
+    result = run_async(fetch_api(f"/api/volume/predict?symbol={symbol}&timeframe={timeframe}"))
+    return jsonify(result)
+
+
+@app.route('/api/volume/profile')
+def api_volume_profile():
+    """Get volume profile"""
+    symbol = request.args.get('symbol', 'EURUSD')
+    timeframe = request.args.get('timeframe', 'M15')
+    result = run_async(fetch_api(f"/api/volume/profile?symbol={symbol}&timeframe={timeframe}"))
+    return jsonify(result)
+
+
 # ============== Error Handlers ==============
 
 @app.errorhandler(404)

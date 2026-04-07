@@ -19,6 +19,9 @@ from app.models.schemas import (
 from app.services.data_ingestion import data_pipeline
 from app.engines.decision_engine import decision_engine, signal_aggregator
 from app.engines.risk_engine import risk_engine
+from app.engines.direction_model import direction_model
+from app.engines.duration_model import duration_model
+from app.engines.feature_engine import feature_engine
 from config.settings import get_settings
 
 settings = get_settings()
@@ -681,9 +684,9 @@ async def get_mcmc_estimate(symbol: str = Query("EURUSD")):
         # Calculate features
         features = feature_engine.calculate_features(symbol, ohlcv)
         
-        # Get direction prediction from decision engine
-        direction_pred = decision_engine.direction_model.predict(features)
-        duration_pred = decision_engine.duration_model.predict(features, direction_pred.predicted_direction)
+        # Get direction prediction
+        direction_pred = direction_model.predict(features)
+        duration_pred = duration_model.predict(features, direction_pred.predicted_direction)
         
         # Get regime probabilities
         regime_analysis = regime_analyzer.analyze(ohlcv)
@@ -729,8 +732,8 @@ async def quantify_uncertainty(symbol: str = Query("EURUSD")):
             }
         
         features = feature_engine.calculate_features(symbol, ohlcv)
-        direction_pred = decision_engine.direction_model.predict(features)
-        duration_pred = decision_engine.duration_model.predict(features, direction_pred.predicted_direction)
+        direction_pred = direction_model.predict(features)
+        duration_pred = duration_model.predict(features, direction_pred.predicted_direction)
         
         uncertainty = uncertainty_quantifier.quantify_uncertainty(
             direction_pred.confidence,
@@ -749,6 +752,111 @@ async def quantify_uncertainty(symbol: str = Query("EURUSD")):
             "confidence_bounds": {"lower_90": 0.3, "upper_90": 0.7, "width": 0.4},
             "prediction_quality": "low",
             "recommendation": "Error in calculation"
+        }
+
+
+# ============== Volume Analysis ==============
+
+from app.engines.volume_engine import volume_engine
+
+@app.get("/api/volume/analyze", tags=["Volume"])
+async def analyze_volume(
+    symbol: str = Query("EURUSD"),
+    timeframe: str = Query("M15")
+):
+    """Analyze volume for a symbol"""
+    try:
+        ohlcv = await data_pipeline.get_ohlcv(symbol, timeframe, 100)
+        
+        if not ohlcv or len(ohlcv) < 10:
+            return {
+                "current_volume": 0,
+                "avg_volume": 0,
+                "volume_ratio": 1.0,
+                "volume_trend": "neutral",
+                "signal_strength": 0,
+                "message": "Insufficient data"
+            }
+        
+        analysis = volume_engine.analyze(symbol, ohlcv)
+        return analysis.to_dict()
+        
+    except Exception as e:
+        logger.error(f"Volume analysis error: {e}")
+        return {
+            "current_volume": 0,
+            "avg_volume": 0,
+            "volume_ratio": 1.0,
+            "volume_trend": "neutral",
+            "signal_strength": 0,
+            "message": str(e)
+        }
+
+
+@app.get("/api/volume/predict", tags=["Volume"])
+async def predict_volume(
+    symbol: str = Query("EURUSD"),
+    timeframe: str = Query("M15")
+):
+    """Get volume-based prediction"""
+    try:
+        ohlcv = await data_pipeline.get_ohlcv(symbol, timeframe, 100)
+        
+        if not ohlcv or len(ohlcv) < 20:
+            return {
+                "direction_bias": "NEUTRAL",
+                "confidence": 0.5,
+                "breakout_probability": 0.3,
+                "reversal_probability": 0.3,
+                "message": "Insufficient data"
+            }
+        
+        prediction = volume_engine.predict(ohlcv)
+        return prediction.to_dict()
+        
+    except Exception as e:
+        logger.error(f"Volume prediction error: {e}")
+        return {
+            "direction_bias": "NEUTRAL",
+            "confidence": 0.5,
+            "breakout_probability": 0.3,
+            "reversal_probability": 0.3,
+            "message": str(e)
+        }
+
+
+@app.get("/api/volume/profile", tags=["Volume"])
+async def get_volume_profile(
+    symbol: str = Query("EURUSD"),
+    timeframe: str = Query("M15")
+):
+    """Get volume profile for a symbol"""
+    try:
+        ohlcv = await data_pipeline.get_ohlcv(symbol, timeframe, 100)
+        
+        if not ohlcv or len(ohlcv) < 10:
+            return {
+                "high_volume_nodes": [],
+                "low_volume_nodes": [],
+                "poc_price": 0,
+                "message": "Insufficient data"
+            }
+        
+        analysis = volume_engine.analyze(symbol, ohlcv)
+        return {
+            "high_volume_nodes": analysis.high_volume_nodes,
+            "low_volume_nodes": analysis.low_volume_nodes,
+            "poc_price": analysis.poc_price,
+            "current_price": ohlcv[-1].close if ohlcv else 0
+        }
+        
+    except Exception as e:
+        logger.error(f"Volume profile error: {e}")
+        return {
+            "high_volume_nodes": [],
+            "low_volume_nodes": [],
+            "poc_price": 0,
+            "message": str(e)
         }
 
 
