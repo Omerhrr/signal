@@ -139,6 +139,12 @@ def performance():
     return render_template('pages/performance.html')
 
 
+@app.route('/duration')
+def duration():
+    """Duration-based predictions page"""
+    return render_template('pages/duration.html')
+
+
 # ============== HTMX Partial Routes ==============
 
 @app.route('/partials/signal-cards')
@@ -410,6 +416,58 @@ def api_volume_profile():
     symbol = request.args.get('symbol', 'EURUSD')
     timeframe = request.args.get('timeframe', 'M15')
     result = run_async(fetch_api(f"/api/volume/profile?symbol={symbol}&timeframe={timeframe}"))
+    return jsonify(result)
+
+
+# ============== Duration Prediction API Routes ==============
+
+@app.route('/api/duration/predict')
+def api_duration_predict():
+    """Get duration predictions"""
+    symbol = request.args.get('symbol', 'EURUSD')
+    timeframe = request.args.get('timeframe', 'M1')
+    result = run_async(fetch_api(f"/api/duration/predict?symbol={symbol}&timeframe={timeframe}"))
+    return jsonify(result)
+
+
+@app.route('/api/duration/generate-signal', methods=['POST'])
+def api_duration_generate_signal():
+    """Generate duration signal"""
+    symbol = request.args.get('symbol', 'EURUSD')
+    timeframe = request.args.get('timeframe', 'M1')
+    min_confidence = request.args.get('min_confidence', 0.55)
+    max_noise = request.args.get('max_noise', 0.4)
+    endpoint = f"/api/duration/generate-signal?symbol={symbol}&timeframe={timeframe}&min_confidence={min_confidence}&max_noise={max_noise}"
+    result = run_async(fetch_api(endpoint, "POST", {}))
+    return jsonify(result)
+
+
+@app.route('/api/duration/active-signals')
+def api_duration_active_signals():
+    """Get active duration signals"""
+    result = run_async(fetch_api("/api/duration/active-signals"))
+    return jsonify(result)
+
+
+@app.route('/api/duration/history')
+def api_duration_history():
+    """Get duration signal history"""
+    limit = request.args.get('limit', 50)
+    result = run_async(fetch_api(f"/api/duration/history?limit={limit}"))
+    return jsonify(result)
+
+
+@app.route('/api/duration/stats')
+def api_duration_stats():
+    """Get duration prediction stats"""
+    result = run_async(fetch_api("/api/duration/stats"))
+    return jsonify(result)
+
+
+@app.route('/api/duration/best-duration')
+def api_duration_best_duration():
+    """Get best performing duration"""
+    result = run_async(fetch_api("/api/duration/best-duration"))
     return jsonify(result)
 
 

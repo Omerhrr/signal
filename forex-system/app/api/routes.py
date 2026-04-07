@@ -982,6 +982,179 @@ async def trigger_scan_now():
     )
 
 
+# ============== Duration-Based Predictions ==============
+
+from app.engines.duration_predictor import duration_predictor
+from app.services.duration_outcome_tracker import duration_outcome_tracker
+
+# Set data pipeline reference for outcome tracker
+duration_outcome_tracker.set_data_pipeline(data_pipeline)
+
+
+@app.get("/api/duration/predict", tags=["Duration Predictions"])
+async def get_duration_predictions(
+    symbol: str = Query("EURUSD", description="Trading symbol"),
+    timeframe: str = Query("M1", description="Source timeframe for analysis")
+):
+    """Get duration-based predictions for all time horizons (1min, 2min, 3min, 5min, etc.)"""
+    try:
+        ohlcv = await data_pipeline.get_ohlcv(symbol, timeframe, 100)
+        tick = await data_pipeline.get_tick(symbol)
+        
+        if not ohlcv or len(ohlcv) < 20:
+            return APIResponse(
+                success=False,
+                message="Insufficient data for predictions",
+                data=[]
+            )
+        
+        current_price = tick.bid if tick else ohlcv[-1].close
+        
+        # Get market state for volatility
+        market_state = await data_pipeline.get_market_state(symbol)
+        volatility = market_state.get('volatility', 0) if market_state else 0
+        
+        predictions = duration_predictor.predict_durations(symbol, ohlcv, current_price, volatility)
+        
+        return APIResponse(
+            success=True,
+            message=f"Generated {len(predictions)} duration predictions",
+            data=[p.to_dict() for p in predictions]
+        )
+        
+    except Exception as e:
+        logger.error(f"Duration prediction error: {e}")
+        return APIResponse(
+            success=False,
+            message=str(e),
+            data=[]
+        )
+
+
+@app.post("/api/duration/generate-signal", tags=["Duration Predictions"])
+async def generate_duration_signal(
+    symbol: str = Query(..., description="Trading symbol"),
+    timeframe: str = Query("M1", description="Source timeframe for analysis"),
+    min_confidence: float = Query(0.55, ge=0.5, le=0.95, description="Minimum confidence threshold"),
+    max_noise: float = Query(0.4, ge=0.1, le=0.8, description="Maximum noise score")
+):
+    """Generate a duration-based signal with entry, target, stop loss, and duration"""
+    try:
+        ohlcv = await data_pipeline.get_ohlcv(symbol.upper(), timeframe, 100)
+        tick = await data_pipeline.get_tick(symbol.upper())
+        
+        if not ohlcv or len(ohlcv) < 20:
+            return APIResponse(
+                success=False,
+                message="Insufficient market data",
+                data=None
+            )
+        
+        current_price = tick.bid if tick else ohlcv[-1].close
+        
+        # Get market state
+        market_state = await data_pipeline.get_market_state(symbol.upper())
+        volatility = market_state.get('volatility', 0) if market_state else 0
+        session = market_state.get('session', 'unknown') if market_state else 'unknown'
+        
+        # Generate signal
+        signal = duration_predictor.generate_signal(
+            symbol.upper(),
+            ohlcv,
+            current_price,
+            volatility,
+            session,
+            min_confidence,
+            max_noise
+        )
+        
+        if not signal:
+            return APIResponse(
+                success=False,
+                message="No valid signal generated - criteria not met (confidence too low or noise too high)",
+                data=None
+            )
+        
+        # Add to outcome tracker
+        duration_outcome_tracker.add_signal(signal)
+        
+        return APIResponse(
+            success=True,
+            message=f"Signal generated: {signal.direction.value} for {signal.duration_minutes}min",
+            data=signal.to_dict()
+        )
+        
+    except Exception as e:
+        logger.error(f"Duration signal generation error: {e}")
+        return APIResponse(
+            success=False,
+            message=str(e),
+            data=None
+        )
+
+
+@app.get("/api/duration/active-signals", tags=["Duration Predictions"])
+async def get_active_duration_signals():
+    """Get all active duration signals being tracked"""
+    signals = duration_outcome_tracker.get_active_signals()
+    return APIResponse(
+        success=True,
+        message=f"Found {len(signals)} active signals",
+        data=[s.to_dict() for s in signals]
+    )
+
+
+@app.get("/api/duration/history", tags=["Duration Predictions"])
+async def get_duration_history(limit: int = Query(50, ge=1, le=200)):
+    """Get historical duration signals with outcomes"""
+    signals = duration_outcome_tracker.get_recent_signals(limit)
+    return APIResponse(
+        success=True,
+        message=f"Retrieved {len(signals)} historical signals",
+        data=signals
+    )
+
+
+@app.get("/api/duration/stats", tags=["Duration Predictions"])
+async def get_duration_stats():
+    """Get duration prediction performance statistics"""
+    stats = duration_outcome_tracker.get_stats()
+    return APIResponse(
+        success=True,
+        message="Statistics retrieved",
+        data=stats
+    )
+
+
+@app.get("/api/duration/best-duration", tags=["Duration Predictions"])
+async def get_best_duration():
+    """Get the duration with the best historical win rate"""
+    duration, win_rate = duration_outcome_tracker.get_best_duration()
+    return APIResponse(
+        success=True,
+        message="Best duration found",
+        data={
+            "best_duration_minutes": duration,
+            "win_rate": win_rate
+        }
+    )
+
+
+@app.on_event("startup")
+async def start_duration_tracker():
+    """Start the duration outcome tracker on startup"""
+    duration_outcome_tracker.load_signals()
+    await duration_outcome_tracker.start_tracking()
+    logger.info("Duration outcome tracker started")
+
+
+@app.on_event("shutdown")
+async def stop_duration_tracker():
+    """Stop the duration outcome tracker on shutdown"""
+    await duration_outcome_tracker.stop_tracking()
+    logger.info("Duration outcome tracker stopped")
+
+
 # Run with: uvicorn app.api.routes:app --reload --host 0.0.0.0 --port 8000
 if __name__ == "__main__":
     import uvicorn

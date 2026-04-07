@@ -1,0 +1,391 @@
+{% extends "base.html" %}
+
+{% block title %}Duration Predictions - {{ app_name }}{% endblock %}
+
+{% block content %}
+<div x-data="durationApp()" x-init="init()">
+    <!-- Header -->
+    <div class="mb-4 md:mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-3 sm:space-y-0">
+        <div>
+            <h1 class="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Duration Predictions</h1>
+            <p class="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">Predict direction for specific time durations (1min, 2min, 3min, etc.)</p>
+        </div>
+        <div class="flex items-center space-x-2">
+            <select x-model="selectedSymbol" @change="loadPredictions()" 
+                    class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">
+                <template x-for="symbol in symbols" :key="symbol">
+                    <option :value="symbol" x-text="symbol"></option>
+                </template>
+            </select>
+            <button @click="generateSignal()" :disabled="generating"
+                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg flex items-center space-x-2 disabled:opacity-50">
+                <svg x-show="!generating" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                </svg>
+                <span x-text="generating ? 'Generating...' : 'Generate Signal'"></span>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Stats Row -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 md:p-4 border border-gray-200 dark:border-gray-700">
+            <p class="text-xs text-gray-500 dark:text-gray-400">Total Signals</p>
+            <p class="text-xl md:text-2xl font-bold text-gray-900 dark:text-white" x-text="stats.total_signals"></p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 md:p-4 border border-gray-200 dark:border-gray-700">
+            <p class="text-xs text-gray-500 dark:text-gray-400">Win Rate</p>
+            <p class="text-xl md:text-2xl font-bold text-green-600" x-text="stats.win_rate + '%'"></p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 md:p-4 border border-gray-200 dark:border-gray-700">
+            <p class="text-xs text-gray-500 dark:text-gray-400">Total Pips</p>
+            <p class="text-xl md:text-2xl font-bold" :class="stats.total_pips >= 0 ? 'text-green-600' : 'text-red-600'" x-text="stats.total_pips"></p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 md:p-4 border border-gray-200 dark:border-gray-700">
+            <p class="text-xs text-gray-500 dark:text-gray-400">Best Duration</p>
+            <p class="text-xl md:text-2xl font-bold text-purple-600" x-text="bestDuration + ' min'"></p>
+        </div>
+    </div>
+    
+    <!-- Duration Predictions Grid -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 mb-4 md:mb-6">
+        <div class="px-3 md:px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <h2 class="text-base md:text-lg font-semibold text-gray-900 dark:text-white">Duration Predictions</h2>
+        </div>
+        <div class="p-3 md:p-4">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
+                <template x-for="pred in predictions" :key="pred.duration_minutes">
+                    <div class="p-3 rounded-lg border text-center"
+                         :class="{
+                             'border-green-500 bg-green-50 dark:bg-green-900/20': pred.direction === 'BUY' && pred.confidence >= 0.6,
+                             'border-red-500 bg-red-50 dark:bg-red-900/20': pred.direction === 'SELL' && pred.confidence >= 0.6,
+                             'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50': pred.confidence < 0.6
+                         }">
+                        <div class="text-lg md:text-xl font-bold text-gray-900 dark:text-white" x-text="pred.duration_minutes + ' min'"></div>
+                        <div class="text-sm font-semibold mt-1"
+                             :class="{
+                                 'text-green-600': pred.direction === 'BUY',
+                                 'text-red-600': pred.direction === 'SELL',
+                                 'text-gray-500': pred.direction === 'NEUTRAL'
+                             }"
+                             x-text="pred.direction"></div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            <span x-text="(pred.confidence * 100).toFixed(0) + '%'"></span>
+                            <span class="ml-1" x-text="'(' + pred.expected_move_pips.toFixed(1) + ' pips)'"></span>
+                        </div>
+                        <div class="mt-2 text-xs">
+                            <span class="text-gray-500">Noise:</span>
+                            <span :class="pred.noise_score > 0.4 ? 'text-red-500' : 'text-green-500'" x-text="pred.noise_score.toFixed(2)"></span>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            
+            <div x-show="predictions.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
+                <p>No predictions available. Select a symbol to generate predictions.</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+        <!-- Active Signals -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <div class="px-3 md:px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <h2 class="text-base md:text-lg font-semibold text-gray-900 dark:text-white">Active Signals</h2>
+                <span class="text-xs md:text-sm text-gray-500 dark:text-gray-400" x-text="activeSignals.length + ' signals'"></span>
+            </div>
+            <div class="p-3 md:p-4 space-y-2 md:space-y-3 max-h-96 overflow-y-auto">
+                <template x-for="signal in activeSignals" :key="signal.signal_id">
+                    <div class="p-3 rounded-lg border"
+                         :class="signal.direction === 'BUY' ? 'border-green-500 bg-green-50 dark:bg-green-900/10' : 'border-red-500 bg-red-50 dark:bg-red-900/10'">
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <span class="font-bold text-gray-900 dark:text-white" x-text="signal.symbol"></span>
+                                <span class="px-2 py-0.5 text-xs font-semibold rounded ml-2"
+                                      :class="signal.direction === 'BUY' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
+                                      x-text="signal.direction"></span>
+                            </div>
+                            <span class="text-xs text-gray-500" x-text="signal.duration_minutes + ' min'"></span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs mb-2">
+                            <div>
+                                <span class="text-gray-500">Entry:</span>
+                                <span class="font-medium ml-1" x-text="signal.entry_price?.toFixed(5)"></span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">Conf:</span>
+                                <span class="font-medium ml-1" x-text="(signal.confidence * 100).toFixed(0) + '%'"></span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 text-xs">
+                            <div>
+                                <span class="text-gray-500">Target:</span>
+                                <span class="font-medium text-green-600 ml-1" x-text="signal.target_price?.toFixed(5)"></span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">Stop:</span>
+                                <span class="font-medium text-red-600 ml-1" x-text="signal.stop_loss_price?.toFixed(5)"></span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">R:R:</span>
+                                <span class="font-medium text-blue-600 ml-1" x-text="signal.risk_reward_ratio?.toFixed(1)"></span>
+                            </div>
+                        </div>
+                        <!-- Progress Bar -->
+                        <div class="mt-2">
+                            <div class="h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                <div class="h-full bg-blue-500 transition-all duration-1000"
+                                     :style="'width: ' + getProgress(signal) + '%'"></div>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1 flex justify-between">
+                                <span x-text="getTimeRemaining(signal) + ' remaining'"></span>
+                                <span x-text="signal.status"></span>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                
+                <div x-show="activeSignals.length === 0" class="text-center py-6 text-gray-500 dark:text-gray-400 text-sm">
+                    <p>No active signals</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Completed Signals -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <div class="px-3 md:px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                <h2 class="text-base md:text-lg font-semibold text-gray-900 dark:text-white">Recent Completed</h2>
+            </div>
+            <div class="p-3 md:p-4 space-y-2 max-h-96 overflow-y-auto">
+                <template x-for="signal in recentSignals" :key="signal.signal_id">
+                    <div class="p-3 rounded-lg border flex items-center justify-between"
+                         :class="{
+                             'border-green-500 bg-green-50 dark:bg-green-900/10': signal.outcome === 'win',
+                             'border-red-500 bg-red-50 dark:bg-red-900/10': signal.outcome === 'loss',
+                             'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/10': signal.outcome === 'breakeven'
+                         }">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-8 h-8 rounded-full flex items-center justify-center"
+                                 :class="{
+                                     'bg-green-200 text-green-700': signal.outcome === 'win',
+                                     'bg-red-200 text-red-700': signal.outcome === 'loss',
+                                     'bg-yellow-200 text-yellow-700': signal.outcome === 'breakeven'
+                                 }">
+                                <span x-show="signal.outcome === 'win'">✓</span>
+                                <span x-show="signal.outcome === 'loss'">✗</span>
+                                <span x-show="signal.outcome === 'breakeven'">–</span>
+                            </div>
+                            <div>
+                                <div class="font-medium text-gray-900 dark:text-white">
+                                    <span x-text="signal.symbol"></span>
+                                    <span class="ml-1 text-xs" x-text="signal.direction"></span>
+                                </div>
+                                <div class="text-xs text-gray-500">
+                                    <span x-text="signal.duration_minutes + ' min'"></span>
+                                    <span class="mx-1">•</span>
+                                    <span x-text="signal.actual_pips?.toFixed(1) + ' pips'"></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-sm font-bold"
+                                 :class="{
+                                     'text-green-600': signal.actual_pips > 0,
+                                     'text-red-600': signal.actual_pips < 0
+                                 }"
+                                 x-text="(signal.actual_pips > 0 ? '+' : '') + signal.actual_pips?.toFixed(1)"></div>
+                            <div class="text-xs text-gray-500" x-text="signal.outcome.toUpperCase()"></div>
+                        </div>
+                    </div>
+                </template>
+                
+                <div x-show="recentSignals.length === 0" class="text-center py-6 text-gray-500 dark:text-gray-400 text-sm">
+                    <p>No completed signals yet</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Performance by Duration -->
+    <div class="mt-4 md:mt-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+        <div class="px-3 md:px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <h2 class="text-base md:text-lg font-semibold text-gray-900 dark:text-white">Performance by Duration</h2>
+        </div>
+        <div class="p-3 md:p-4 overflow-x-auto">
+            <table class="min-w-full text-xs md:text-sm">
+                <thead>
+                    <tr class="border-b border-gray-200 dark:border-gray-700">
+                        <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400">Duration</th>
+                        <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400">Total</th>
+                        <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400">Wins</th>
+                        <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400">Losses</th>
+                        <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400">Win Rate</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="(durStats, duration) in stats.by_duration" :key="duration">
+                        <tr class="border-b border-gray-100 dark:border-gray-700">
+                            <td class="px-3 py-2 font-medium text-gray-900 dark:text-white" x-text="duration + ' min'"></td>
+                            <td class="px-3 py-2 text-gray-600 dark:text-gray-400" x-text="durStats.total"></td>
+                            <td class="px-3 py-2 text-green-600" x-text="durStats.wins"></td>
+                            <td class="px-3 py-2 text-red-600" x-text="durStats.losses"></td>
+                            <td class="px-3 py-2">
+                                <div class="flex items-center space-x-2">
+                                    <div class="w-16 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                        <div class="h-full bg-green-500" :style="'width: ' + (durStats.win_rate * 100) + '%'"></div>
+                                    </div>
+                                    <span x-text="(durStats.win_rate * 100).toFixed(0) + '%'"></span>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+            
+            <div x-show="Object.keys(stats.by_duration).length === 0" class="text-center py-6 text-gray-500 dark:text-gray-400 text-sm">
+                <p>No performance data yet. Generate signals to start tracking.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function durationApp() {
+    return {
+        selectedSymbol: 'EURUSD',
+        symbols: ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD'],
+        predictions: [],
+        activeSignals: [],
+        recentSignals: [],
+        stats: {
+            total_signals: 0,
+            wins: 0,
+            losses: 0,
+            win_rate: 0,
+            total_pips: 0,
+            by_duration: {}
+        },
+        bestDuration: 15,
+        generating: false,
+        
+        init() {
+            this.loadPredictions();
+            this.loadActiveSignals();
+            this.loadRecentSignals();
+            this.loadStats();
+            
+            // Auto refresh
+            setInterval(() => {
+                this.loadActiveSignals();
+                this.loadRecentSignals();
+                this.loadStats();
+            }, 5000);
+            
+            // Refresh predictions less often
+            setInterval(() => {
+                this.loadPredictions();
+            }, 30000);
+        },
+        
+        async loadPredictions() {
+            try {
+                const response = await fetch(`/api/duration/predict?symbol=${this.selectedSymbol}`);
+                const data = await response.json();
+                if (data.success) {
+                    this.predictions = data.data;
+                }
+            } catch (error) {
+                console.error('Error loading predictions:', error);
+            }
+        },
+        
+        async loadActiveSignals() {
+            try {
+                const response = await fetch('/api/duration/active-signals');
+                const data = await response.json();
+                if (data.success) {
+                    this.activeSignals = data.data;
+                }
+            } catch (error) {
+                console.error('Error loading active signals:', error);
+            }
+        },
+        
+        async loadRecentSignals() {
+            try {
+                const response = await fetch('/api/duration/history?limit=20');
+                const data = await response.json();
+                if (data.success) {
+                    this.recentSignals = data.data;
+                }
+            } catch (error) {
+                console.error('Error loading recent signals:', error);
+            }
+        },
+        
+        async loadStats() {
+            try {
+                const response = await fetch('/api/duration/stats');
+                const data = await response.json();
+                if (data.success) {
+                    this.stats = data.data;
+                }
+                
+                const bestResponse = await fetch('/api/duration/best-duration');
+                const bestData = await bestResponse.json();
+                if (bestData.success) {
+                    this.bestDuration = bestData.data.best_duration_minutes;
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        },
+        
+        async generateSignal() {
+            this.generating = true;
+            try {
+                const response = await fetch(
+                    `/api/duration/generate-signal?symbol=${this.selectedSymbol}&min_confidence=0.55&max_noise=0.4`,
+                    { method: 'POST' }
+                );
+                const data = await response.json();
+                
+                if (data.success) {
+                    await this.loadActiveSignals();
+                    await this.loadPredictions();
+                } else {
+                    console.log('No signal generated:', data.message);
+                }
+            } catch (error) {
+                console.error('Error generating signal:', error);
+            } finally {
+                this.generating = false;
+            }
+        },
+        
+        getProgress(signal) {
+            if (!signal.timestamp) return 0;
+            const start = new Date(signal.timestamp).getTime();
+            const now = Date.now();
+            const duration = signal.duration_minutes * 60 * 1000;
+            const elapsed = now - start;
+            return Math.min(100, (elapsed / duration) * 100);
+        },
+        
+        getTimeRemaining(signal) {
+            if (!signal.timestamp) return '0:00';
+            const start = new Date(signal.timestamp).getTime();
+            const now = Date.now();
+            const duration = signal.duration_minutes * 60 * 1000;
+            const remaining = Math.max(0, duration - (now - start));
+            const mins = Math.floor(remaining / 60000);
+            const secs = Math.floor((remaining % 60000) / 1000);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+    };
+}
+</script>
+{% endblock %}

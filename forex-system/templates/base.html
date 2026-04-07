@@ -116,6 +116,9 @@
                         <a href="/" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 {% if request.path == '/' %}bg-gray-100 dark:bg-gray-700{% endif %}">
                             Dashboard
                         </a>
+                        <a href="/duration" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 {% if request.path == '/duration' %}bg-gray-100 dark:bg-gray-700{% endif %}">
+                            Duration
+                        </a>
                         <a href="/signals" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 {% if request.path == '/signals' %}bg-gray-100 dark:bg-gray-700{% endif %}">
                             Signals
                         </a>
@@ -163,6 +166,7 @@
         <div x-show="mobileMenu" x-cloak class="md:hidden border-t border-gray-200 dark:border-gray-700">
             <div class="px-2 pt-2 pb-3 space-y-1">
                 <a href="/" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Dashboard</a>
+                <a href="/duration" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Duration</a>
                 <a href="/signals" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Signals</a>
                 <a href="/performance" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Performance</a>
                 <a href="/analysis/EURUSD" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Analysis</a>
