@@ -166,56 +166,87 @@ class DurationPredictor:
     
     def _calculate_features(self, ohlcv_data: List[OHLCV]) -> Dict[str, float]:
         """Calculate features for prediction"""
-        
+
         closes = np.array([c.close for c in ohlcv_data])
         highs = np.array([c.high for c in ohlcv_data])
         lows = np.array([c.low for c in ohlcv_data])
         volumes = np.array([c.volume for c in ohlcv_data])
-        
+
         features = {}
-        
-        # Price features
-        features['returns'] = np.diff(closes[-20:]) / closes[-21:-1]
-        features['log_returns'] = np.log(closes[-20:] / closes[-21:-1])
-        
+
+        # Price features - fix array shapes
+        if len(closes) >= 21:
+            features['returns'] = np.diff(closes[-21:]) / closes[-22:-1]
+            features['log_returns'] = np.log(closes[-21:] / closes[-22:-1])
+        elif len(closes) >= 2:
+            features['returns'] = np.diff(closes) / closes[:-1]
+            features['log_returns'] = np.log(closes[1:] / closes[:-1])
+        else:
+            features['returns'] = np.array([0])
+            features['log_returns'] = np.array([0])
+
         # Momentum features
         features['momentum_5'] = (closes[-1] - closes[-5]) / closes[-5] if len(closes) >= 5 else 0
         features['momentum_10'] = (closes[-1] - closes[-10]) / closes[-10] if len(closes) >= 10 else 0
         features['momentum_20'] = (closes[-1] - closes[-20]) / closes[-20] if len(closes) >= 20 else 0
-        
+
         # Volatility features
-        features['volatility_5'] = np.std(features['returns'][-5:]) if len(features['returns']) >= 5 else 0
-        features['volatility_10'] = np.std(features['returns'][-10:]) if len(features['returns']) >= 10 else 0
-        features['volatility_20'] = np.std(features['returns']) if len(features['returns']) > 0 else 0
-        
+        returns = features['returns']
+        features['volatility_5'] = np.std(returns[-5:]) if len(returns) >= 5 else 0
+        features['volatility_10'] = np.std(returns[-10:]) if len(returns) >= 10 else 0
+        features['volatility_20'] = np.std(returns) if len(returns) > 0 else 0
+
         # Range features
-        ranges = highs[-20:] - lows[-20:]
-        features['avg_range'] = np.mean(ranges)
+        lookback = min(20, len(highs), len(lows))
+        ranges = highs[-lookback:] - lows[-lookback:]
+        features['avg_range'] = np.mean(ranges) if len(ranges) > 0 else 0.0001
         features['range_ratio'] = (highs[-1] - lows[-1]) / features['avg_range'] if features['avg_range'] > 0 else 1
-        
+
         # Volume features
-        features['volume_ratio'] = volumes[-1] / np.mean(volumes[-20:]) if np.mean(volumes[-20:]) > 0 else 1
-        features['volume_trend'] = (np.mean(volumes[-5:]) - np.mean(volumes[-15:-5])) / np.mean(volumes[-15:-5]) if np.mean(volumes[-15:-5]) > 0 else 0
-        
-        # Price position
-        features['price_position'] = (closes[-1] - lows[-20:]) / (highs[-20:] - lows[-20:])
-        features['price_position'] = np.mean(features['price_position'])
-        
+        vol_lookback = min(20, len(volumes))
+        features['volume_ratio'] = volumes[-1] / np.mean(volumes[-vol_lookback:]) if np.mean(volumes[-vol_lookback:]) > 0 else 1
+        if len(volumes) >= 15:
+            features['volume_trend'] = (np.mean(volumes[-5:]) - np.mean(volumes[-15:-5])) / np.mean(volumes[-15:-5]) if np.mean(volumes[-15:-5]) > 0 else 0
+        else:
+            features['volume_trend'] = 0
+
+        # Price position - FIXED: calculate single value, not array
+        lookback = min(20, len(highs), len(lows))
+        period_high = np.max(highs[-lookback:])
+        period_low = np.min(lows[-lookback:])
+        price_range = period_high - period_low
+        if price_range > 0:
+            features['price_position'] = (closes[-1] - period_low) / price_range
+        else:
+            features['price_position'] = 0.5
+
         # Trend features
-        features['higher_highs'] = np.sum(highs[-10:] > highs[-11:-1]) / 9 if len(highs) >= 11 else 0.5
-        features['lower_lows'] = np.sum(lows[-10:] < lows[-11:-1]) / 9 if len(lows) >= 11 else 0.5
-        
+        if len(highs) >= 11:
+            features['higher_highs'] = np.sum(highs[-10:] > highs[-11:-1]) / 9
+        else:
+            features['higher_highs'] = 0.5
+        if len(lows) >= 11:
+            features['lower_lows'] = np.sum(lows[-10:] < lows[-11:-1]) / 9
+        else:
+            features['lower_lows'] = 0.5
+
         # Z-score
-        features['zscore'] = (closes[-1] - np.mean(closes[-20:])) / np.std(closes[-20:]) if np.std(closes[-20:]) > 0 else 0
-        
+        lookback = min(20, len(closes))
+        mean_close = np.mean(closes[-lookback:])
+        std_close = np.std(closes[-lookback:])
+        features['zscore'] = (closes[-1] - mean_close) / std_close if std_close > 0 else 0
+
         # RSI approximation
-        gains = np.maximum(features['returns'], 0)
-        losses = np.abs(np.minimum(features['returns'], 0))
-        avg_gain = np.mean(gains[-14:]) if len(gains) >= 14 else np.mean(gains)
-        avg_loss = np.mean(losses[-14:]) if len(losses) >= 14 else np.mean(losses)
-        rs = avg_gain / avg_loss if avg_loss > 0 else 100
-        features['rsi'] = 100 - (100 / (1 + rs))
-        
+        if len(features['returns']) >= 14:
+            gains = np.maximum(features['returns'], 0)
+            losses = np.abs(np.minimum(features['returns'], 0))
+            avg_gain = np.mean(gains[-14:])
+            avg_loss = np.mean(losses[-14:])
+            rs = avg_gain / avg_loss if avg_loss > 0 else 100
+            features['rsi'] = 100 - (100 / (1 + rs))
+        else:
+            features['rsi'] = 50
+
         return features
     
     def _predict_single_duration(

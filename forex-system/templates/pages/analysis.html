@@ -27,7 +27,7 @@
                     class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
                 <option value="M1">M1</option>
                 <option value="M5">M5</option>
-                <option value="M15">M15</option>
+                <option value="M15" selected>M15</option>
                 <option value="M30">M30</option>
                 <option value="H1">H1</option>
                 <option value="H4">H4</option>
@@ -109,6 +109,228 @@
                 </div>
                 <div class="p-4">
                     <div id="duration-gauge" class="h-48"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Indicators Row -->
+    <div class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Volume Analysis -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Volume Analysis</h2>
+            </div>
+            <div class="p-4">
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Current Volume</p>
+                        <p class="text-xl font-bold text-gray-900 dark:text-white" x-text="volumeAnalysis.current_volume?.toLocaleString() || '---'"></p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Volume Ratio</p>
+                        <p class="text-xl font-bold"
+                           :class="volumeAnalysis.volume_ratio > 1.5 ? 'text-green-500' : volumeAnalysis.volume_ratio < 0.7 ? 'text-red-500' : 'text-gray-900 dark:text-white'"
+                           x-text="(volumeAnalysis.volume_ratio || 1).toFixed(2) + 'x'"></p>
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-500 dark:text-gray-400">Trend</span>
+                        <span class="text-sm font-medium capitalize"
+                              :class="{
+                                  'text-green-500': volumeAnalysis.volume_trend === 'increasing',
+                                  'text-red-500': volumeAnalysis.volume_trend === 'decreasing',
+                                  'text-gray-500': volumeAnalysis.volume_trend === 'neutral'
+                              }"
+                              x-text="volumeAnalysis.volume_trend || 'neutral'"></span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-500 dark:text-gray-400">Signal Strength</span>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-16 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                <div class="h-full transition-all duration-500"
+                                     :class="volumeAnalysis.signal_strength > 0.6 ? 'bg-green-500' : volumeAnalysis.signal_strength > 0.3 ? 'bg-yellow-500' : 'bg-gray-400'"
+                                     :style="'width: ' + ((volumeAnalysis.signal_strength || 0) * 100) + '%'"></div>
+                            </div>
+                            <span class="text-sm" x-text="((volumeAnalysis.signal_strength || 0) * 100).toFixed(0) + '%'"></span>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-500 dark:text-gray-400">VSA Pattern</span>
+                        <span class="text-sm font-medium"
+                              :class="{
+                                  'text-green-500': ['strength', 'buying_pressure', 'no_supply'].includes(volumeAnalysis.volume_spread_analysis),
+                                  'text-red-500': ['weakness', 'selling_climax', 'no_demand'].includes(volumeAnalysis.volume_spread_analysis),
+                                  'text-gray-500': volumeAnalysis.volume_spread_analysis === 'neutral'
+                              }"
+                              x-text="volumeAnalysis.volume_spread_analysis?.replace('_', ' ') || 'neutral'"></span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-500 dark:text-gray-400">Accumulation</span>
+                        <span class="text-sm font-medium" :class="volumeAnalysis.accumulation_detected ? 'text-green-500' : 'text-gray-400'" x-text="volumeAnalysis.accumulation_detected ? 'Yes' : 'No'"></span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-500 dark:text-gray-400">Distribution</span>
+                        <span class="text-sm font-medium" :class="volumeAnalysis.distribution_detected ? 'text-red-500' : 'text-gray-400'" x-text="volumeAnalysis.distribution_detected ? 'Yes' : 'No'"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Custom Combined Indicator -->
+        <div class="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Combined Signal Indicator</h2>
+                <div class="flex items-center space-x-2">
+                    <span class="px-3 py-1 text-sm font-bold rounded-lg"
+                          :class="{
+                              'bg-green-500 text-white': combinedSignal.direction === 'BUY' && combinedSignal.confidence >= 0.6,
+                              'bg-red-500 text-white': combinedSignal.direction === 'SELL' && combinedSignal.confidence >= 0.6,
+                              'bg-gray-500 text-white': combinedSignal.confidence < 0.6
+                          }"
+                          x-text="combinedSignal.direction + ' ' + (combinedSignal.confidence * 100).toFixed(0) + '%'"></span>
+                </div>
+            </div>
+            <div class="p-4">
+                <!-- Main Signal Display -->
+                <div class="mb-4 p-4 rounded-lg"
+                     :class="{
+                         'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800': combinedSignal.direction === 'BUY' && combinedSignal.confidence >= 0.6,
+                         'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800': combinedSignal.direction === 'SELL' && combinedSignal.confidence >= 0.6,
+                         'bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600': combinedSignal.confidence < 0.6
+                     }">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Recommended Action</p>
+                            <p class="text-2xl font-bold"
+                               :class="{
+                                   'text-green-600 dark:text-green-400': combinedSignal.direction === 'BUY',
+                                   'text-red-600 dark:text-red-400': combinedSignal.direction === 'SELL',
+                                   'text-gray-600 dark:text-gray-400': combinedSignal.direction === 'NEUTRAL'
+                               }"
+                               x-text="combinedSignal.direction + ' ' + this.symbol"></p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Expected Duration</p>
+                            <p class="text-xl font-bold text-blue-600 dark:text-blue-400" x-text="combinedSignal.expected_duration + ' min'"></p>
+                        </div>
+                    </div>
+                    <div class="mt-3 grid grid-cols-3 gap-3 text-sm">
+                        <div class="text-center">
+                            <p class="text-gray-500 dark:text-gray-400">Entry Zone</p>
+                            <p class="font-medium text-gray-900 dark:text-white" x-text="combinedSignal.entry_price?.toFixed(5) || '---'"></p>
+                        </div>
+                        <div class="text-center">
+                            <p class="text-gray-500 dark:text-gray-400">Target</p>
+                            <p class="font-medium text-green-600" x-text="combinedSignal.target_price?.toFixed(5) || '---'"></p>
+                        </div>
+                        <div class="text-center">
+                            <p class="text-gray-500 dark:text-gray-400">Stop Loss</p>
+                            <p class="font-medium text-red-600" x-text="combinedSignal.stop_loss_price?.toFixed(5) || '---'"></p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Component Breakdown -->
+                <div class="space-y-3">
+                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Signal Components</p>
+                    
+                    <!-- Technical Analysis -->
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <div class="w-3 h-3 rounded-full" :class="componentScores.technical >= 0.6 ? 'bg-green-500' : componentScores.technical >= 0.4 ? 'bg-yellow-500' : 'bg-red-500'"></div>
+                            <span class="text-sm text-gray-600 dark:text-gray-400">Technical Analysis</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-24 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                <div class="h-full transition-all duration-500"
+                                     :class="componentScores.technical >= 0.6 ? 'bg-green-500' : componentScores.technical >= 0.4 ? 'bg-yellow-500' : 'bg-red-500'"
+                                     :style="'width: ' + (componentScores.technical * 100) + '%'"></div>
+                            </div>
+                            <span class="text-sm w-10 text-right" x-text="(componentScores.technical * 100).toFixed(0) + '%'"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- MCMC Probability -->
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <div class="w-3 h-3 rounded-full" :class="componentScores.mcmc >= 0.6 ? 'bg-green-500' : componentScores.mcmc >= 0.4 ? 'bg-yellow-500' : 'bg-red-500'"></div>
+                            <span class="text-sm text-gray-600 dark:text-gray-400">MCMC Probability</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-24 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                <div class="h-full transition-all duration-500"
+                                     :class="componentScores.mcmc >= 0.6 ? 'bg-green-500' : componentScores.mcmc >= 0.4 ? 'bg-yellow-500' : 'bg-red-500'"
+                                     :style="'width: ' + (componentScores.mcmc * 100) + '%'"></div>
+                            </div>
+                            <span class="text-sm w-10 text-right" x-text="(componentScores.mcmc * 100).toFixed(0) + '%'"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- HMM Regime -->
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <div class="w-3 h-3 rounded-full" :class="componentScores.regime >= 0.6 ? 'bg-green-500' : componentScores.regime >= 0.4 ? 'bg-yellow-500' : 'bg-red-500'"></div>
+                            <span class="text-sm text-gray-600 dark:text-gray-400">Market Regime (HMM)</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-24 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                <div class="h-full transition-all duration-500"
+                                     :class="componentScores.regime >= 0.6 ? 'bg-green-500' : componentScores.regime >= 0.4 ? 'bg-yellow-500' : 'bg-red-500'"
+                                     :style="'width: ' + (componentScores.regime * 100) + '%'"></div>
+                            </div>
+                            <span class="text-sm w-10 text-right" x-text="(componentScores.regime * 100).toFixed(0) + '%'"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- Volume Analysis -->
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <div class="w-3 h-3 rounded-full" :class="componentScores.volume >= 0.6 ? 'bg-green-500' : componentScores.volume >= 0.4 ? 'bg-yellow-500' : 'bg-red-500'"></div>
+                            <span class="text-sm text-gray-600 dark:text-gray-400">Volume Confirmation</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-24 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                <div class="h-full transition-all duration-500"
+                                     :class="componentScores.volume >= 0.6 ? 'bg-green-500' : componentScores.volume >= 0.4 ? 'bg-yellow-500' : 'bg-red-500'"
+                                     :style="'width: ' + (componentScores.volume * 100) + '%'"></div>
+                            </div>
+                            <span class="text-sm w-10 text-right" x-text="(componentScores.volume * 100).toFixed(0) + '%'"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- Duration Prediction -->
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <div class="w-3 h-3 rounded-full" :class="componentScores.duration >= 0.6 ? 'bg-green-500' : componentScores.duration >= 0.4 ? 'bg-yellow-500' : 'bg-red-500'"></div>
+                            <span class="text-sm text-gray-600 dark:text-gray-400">Duration Prediction</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-24 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                <div class="h-full transition-all duration-500"
+                                     :class="componentScores.duration >= 0.6 ? 'bg-green-500' : componentScores.duration >= 0.4 ? 'bg-yellow-500' : 'bg-red-500'"
+                                     :style="'width: ' + (componentScores.duration * 100) + '%'"></div>
+                            </div>
+                            <span class="text-sm w-10 text-right" x-text="(componentScores.duration * 100).toFixed(0) + '%'"></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Quality Metrics -->
+                <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 grid grid-cols-3 gap-4 text-center">
+                    <div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Noise Level</p>
+                        <p class="text-sm font-medium" :class="combinedSignal.noise_score > 0.4 ? 'text-red-500' : 'text-green-500'" x-text="(combinedSignal.noise_score * 100).toFixed(0) + '%'"></p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Risk-Reward</p>
+                        <p class="text-sm font-medium text-blue-600" x-text="'1:' + combinedSignal.risk_reward?.toFixed(1) || '2.0'"></p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Quality Score</p>
+                        <p class="text-sm font-medium" :class="combinedSignal.quality_score >= 0.7 ? 'text-green-500' : 'text-yellow-500'" x-text="(combinedSignal.quality_score * 100).toFixed(0) + '%'"></p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -285,6 +507,30 @@ function analysisApp() {
         durationGauge: null,
         hmmAnalysis: {},
         mcmcAnalysis: {},
+        volumeAnalysis: {},
+        durationPredictions: [],
+        
+        // Combined signal data
+        combinedSignal: {
+            direction: 'NEUTRAL',
+            confidence: 0.5,
+            expected_duration: 15,
+            entry_price: 0,
+            target_price: 0,
+            stop_loss_price: 0,
+            noise_score: 0.3,
+            risk_reward: 2.0,
+            quality_score: 0.5
+        },
+        
+        // Component scores
+        componentScores: {
+            technical: 0.5,
+            mcmc: 0.5,
+            regime: 0.5,
+            volume: 0.5,
+            duration: 0.5
+        },
         
         // Available trading pairs from template
         availableSymbols: {{ trading_pairs | tojson }},
@@ -301,6 +547,8 @@ function analysisApp() {
             this.loadChartData();
             this.loadHMMAnalysis();
             this.loadMCMCAnalysis();
+            this.loadVolumeAnalysis();
+            this.loadDurationPredictions();
             this.initCharts();
             
             // Auto refresh
@@ -312,6 +560,9 @@ function analysisApp() {
                 this.loadChartData();
                 this.loadHMMAnalysis();
                 this.loadMCMCAnalysis();
+                this.loadVolumeAnalysis();
+                this.loadDurationPredictions();
+                this.updateCombinedSignal();
             }, 15000);
         },
         
@@ -356,6 +607,8 @@ function analysisApp() {
             this.loadChartData();
             this.loadHMMAnalysis();
             this.loadMCMCAnalysis();
+            this.loadVolumeAnalysis();
+            this.loadDurationPredictions();
             this.lastSignal = null;
         },
         
@@ -401,6 +654,7 @@ function analysisApp() {
             try {
                 const response = await fetch(`/api/hmm/regime?symbol=${this.symbol}`);
                 this.hmmAnalysis = await response.json();
+                this.updateComponentScore('regime', this.hmmAnalysis.current_state?.confidence || 0.5);
             } catch (error) {
                 console.error('Error loading HMM analysis:', error);
             }
@@ -410,9 +664,136 @@ function analysisApp() {
             try {
                 const response = await fetch(`/api/mcmc/estimate?symbol=${this.symbol}`);
                 this.mcmcAnalysis = await response.json();
+                
+                // Update MCMC component score
+                const mcmcConf = this.mcmcAnalysis.confidence_score || 0.5;
+                this.updateComponentScore('mcmc', mcmcConf);
+                
+                // Update gauges with MCMC data
+                this.updateGauges();
             } catch (error) {
                 console.error('Error loading MCMC analysis:', error);
             }
+        },
+        
+        async loadVolumeAnalysis() {
+            try {
+                const response = await fetch(`/api/volume/analyze?symbol=${this.symbol}&timeframe=${this.timeframe}`);
+                const data = await response.json();
+                this.volumeAnalysis = data;
+                
+                // Calculate volume score
+                let volScore = 0.5;
+                if (data.bullish_volume || data.bearish_volume) volScore += 0.2;
+                if (data.signal_strength > 0.5) volScore += 0.15;
+                if (data.volume_ratio > 1.2) volScore += 0.1;
+                volScore = Math.min(1, Math.max(0, volScore));
+                
+                this.updateComponentScore('volume', volScore);
+            } catch (error) {
+                console.error('Error loading volume analysis:', error);
+            }
+        },
+        
+        async loadDurationPredictions() {
+            try {
+                const response = await fetch(`/api/duration/predict?symbol=${this.symbol}`);
+                const data = await response.json();
+                if (data.success) {
+                    this.durationPredictions = data.data;
+                    this.updateCombinedSignal();
+                }
+            } catch (error) {
+                console.error('Error loading duration predictions:', error);
+            }
+        },
+        
+        updateComponentScore(component, score) {
+            this.componentScores[component] = score;
+            this.updateCombinedSignal();
+        },
+        
+        updateCombinedSignal() {
+            // Get direction from MCMC
+            const mcmcDir = (this.mcmcAnalysis.direction_probability?.mean || 0.5) >= 0.5 ? 'BUY' : 'SELL';
+            const mcmcConf = this.mcmcAnalysis.direction_probability?.mean || 0.5;
+            
+            // Get best duration prediction
+            let bestDuration = 15;
+            let durationConf = 0.5;
+            let durationNoise = 0.3;
+            
+            if (this.durationPredictions && this.durationPredictions.length > 0) {
+                const validPreds = this.durationPredictions.filter(p => p.direction !== 'NEUTRAL' && p.noise_score < 0.5);
+                if (validPreds.length > 0) {
+                    const best = validPreds.reduce((a, b) => (a.confidence * (1 - a.noise_score)) > (b.confidence * (1 - b.noise_score)) ? a : b);
+                    bestDuration = best.duration_minutes;
+                    durationConf = best.confidence;
+                    durationNoise = best.noise_score;
+                }
+            }
+            
+            // Calculate technical score from market state
+            let techScore = 0.5;
+            if (this.marketState.trend === 'BUY') techScore += 0.2;
+            else if (this.marketState.trend === 'SELL') techScore -= 0.2;
+            if (this.marketState.momentum > 0) techScore += 0.1;
+            else techScore -= 0.1;
+            techScore = Math.min(1, Math.max(0, techScore));
+            this.componentScores.technical = techScore;
+            this.componentScores.duration = durationConf;
+            
+            // Calculate combined confidence
+            const weights = { technical: 0.25, mcmc: 0.25, regime: 0.2, volume: 0.15, duration: 0.15 };
+            const weightedConf = (
+                this.componentScores.technical * weights.technical +
+                this.componentScores.mcmc * weights.mcmc +
+                this.componentScores.regime * weights.regime +
+                this.componentScores.volume * weights.volume +
+                this.componentScores.duration * weights.duration
+            );
+            
+            // Determine direction based on multiple signals
+            let directionVotes = { BUY: 0, SELL: 0 };
+            if (mcmcConf >= 0.55) directionVotes[mcmcDir] += 2;
+            if (techScore >= 0.6) directionVotes.BUY += 1;
+            else if (techScore <= 0.4) directionVotes.SELL += 1;
+            if (this.volumeAnalysis.bullish_volume) directionVotes.BUY += 1;
+            if (this.volumeAnalysis.bearish_volume) directionVotes.SELL += 1;
+            
+            const direction = directionVotes.BUY > directionVotes.SELL ? 'BUY' : 
+                             directionVotes.SELL > directionVotes.BUY ? 'SELL' : 'NEUTRAL';
+            
+            // Calculate prices
+            const currentPrice = this.currentTick.bid || 0;
+            const pipValue = this.symbol.includes('JPY') ? 0.01 : 0.0001;
+            const expectedMove = 15; // Default 15 pips
+            
+            let targetPrice = currentPrice;
+            let stopPrice = currentPrice;
+            
+            if (direction === 'BUY') {
+                targetPrice = currentPrice + (expectedMove * pipValue);
+                stopPrice = currentPrice - (expectedMove * 0.5 * pipValue);
+            } else if (direction === 'SELL') {
+                targetPrice = currentPrice - (expectedMove * pipValue);
+                stopPrice = currentPrice + (expectedMove * 0.5 * pipValue);
+            }
+            
+            // Update combined signal
+            this.combinedSignal = {
+                direction: direction,
+                confidence: weightedConf,
+                expected_duration: bestDuration,
+                entry_price: currentPrice,
+                target_price: targetPrice,
+                stop_loss_price: stopPrice,
+                noise_score: durationNoise,
+                risk_reward: 2.0,
+                quality_score: weightedConf * (1 - durationNoise)
+            };
+            
+            this.updateGauges();
         },
         
         initCharts() {
@@ -491,8 +872,8 @@ function analysisApp() {
         },
         
         updateGauges() {
-            // Probability Gauge
-            const probUp = this.lastSignal?.probability_hold_above || 0.5;
+            // Probability Gauge - use MCMC data
+            const probUp = this.mcmcAnalysis.direction_probability?.mean || 0.5;
             
             if (this.probGauge) {
                 this.probGauge.setOption({
@@ -531,8 +912,8 @@ function analysisApp() {
                 });
             }
             
-            // Duration Gauge
-            const duration = parseFloat(this.lastSignal?.expected_duration) || 10;
+            // Duration Gauge - use combined signal duration
+            const duration = this.combinedSignal.expected_duration || 15;
             
             if (this.durationGauge) {
                 this.durationGauge.setOption({
