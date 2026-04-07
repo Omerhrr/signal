@@ -6,13 +6,18 @@ This script runs on Windows (native) and sends MT5 data to the WSL backend.
 Setup:
 1. Install MetaTrader5 on Windows
 2. Install Python on Windows: https://www.python.org/downloads/
-3. Install MT5 Python package: pip install MetaTrader5 requests
-4. Run this script on Windows: python mt5_windows_bridge.py
+3. Install MT5 Python package: pip install MetaTrader5 requests python-dotenv
+4. Copy .env file to the same directory as this script (or parent directory)
+5. Run this script on Windows: python mt5_windows_bridge.py --wsl-host <WSL_IP>
 
 Usage:
     python mt5_windows_bridge.py --wsl-host <WSL_IP> --port 8000
 
 To find your WSL IP address, run in WSL: hostname -I
+
+Configuration:
+    Trading pairs are configured in the .env file via TRADING_PAIRS variable.
+    Example: TRADING_PAIRS=EURUSD,GBPUSD,USDJPY
 """
 
 import argparse
@@ -20,8 +25,10 @@ import json
 import logging
 import sys
 import time
+import os
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
+from pathlib import Path
 
 # Configure logging
 logging.basicConfig(
@@ -30,6 +37,31 @@ logging.basicConfig(
     datefmt='%H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
+    logger.warning("python-dotenv not installed. Using command-line arguments only.")
+    logger.warning("Install with: pip install python-dotenv")
+
+# Load .env from multiple possible locations
+if DOTENV_AVAILABLE:
+    # Try loading from current directory first, then parent directory
+    env_paths = [
+        Path(__file__).parent / ".env",  # Same directory as this script
+        Path(__file__).parent.parent / ".env",  # Parent directory
+        Path.cwd() / ".env",  # Current working directory
+    ]
+    for env_path in env_paths:
+        if env_path.exists():
+            load_dotenv(env_path)
+            logger.info(f"Loaded environment from: {env_path}")
+            break
+    else:
+        logger.info("No .env file found, using environment variables or defaults")
 
 # Check if MT5 is available
 try:
@@ -52,20 +84,29 @@ except ImportError:
     sys.exit(1)
 
 
-# Symbol mapping
-SYMBOL_MAP = {
-    "EURUSD": "EURUSD",
-    "GBPUSD": "GBPUSD",
-    "USDJPY": "USDJPY",
-    "AUDUSD": "AUDUSD",
-    "EURGBP": "EURGBP",
-    "EURJPY": "EURJPY",
-    "GBPJPY": "GBPJPY",
-    "USDCHF": "USDCHF",
-    "NZDUSD": "NZDUSD",
-    "USDCAD": "USDCAD",
-    "XAUUSD": "XAUUSD",
-}
+def get_trading_pairs_from_env() -> List[str]:
+    """Get trading pairs from environment variable"""
+    pairs_str = os.environ.get("TRADING_PAIRS", "EURUSD,GBPUSD,USDJPY")
+    pairs = [p.strip().upper() for p in pairs_str.split(",") if p.strip()]
+    logger.info(f"Trading pairs from config: {pairs}")
+    return pairs
+
+
+# Get trading pairs from environment
+TRADING_PAIRS = get_trading_pairs_from_env()
+
+
+def build_symbol_map(pairs: List[str]) -> Dict[str, str]:
+    """Build symbol mapping for MT5 symbols"""
+    symbol_map = {}
+    for pair in pairs:
+        # Standard mapping - same name
+        symbol_map[pair] = pair
+    return symbol_map
+
+
+# Symbol mapping - built dynamically from configured pairs
+SYMBOL_MAP = build_symbol_map(TRADING_PAIRS)
 
 # MT5 Timeframe constants
 TIMEFRAME_MAP = {
@@ -238,7 +279,7 @@ class MT5Bridge:
                         tick_count += 1
 
                         if tick_count % 10 == 0:
-                            status = "✓" if success else "✗"
+                            status = "OK" if success else "FAIL"
                             logger.info(
                                 f"{status} {symbol}: {tick['bid']:.5f} | "
                                 f"Spread: {tick['spread']:.1f} pips"
@@ -250,7 +291,7 @@ class MT5Bridge:
                         if ohlcv:
                             success = self.send_ohlcv_to_wsl(symbol, "M15", ohlcv)
                             if success:
-                                logger.info(f"✓ Sent {len(ohlcv)} M15 candles for {symbol}")
+                                logger.info(f"OK Sent {len(ohlcv)} M15 candles for {symbol}")
                         last_ohlcv_time = time.time()
 
                 time.sleep(interval)
@@ -284,8 +325,8 @@ def main():
     parser.add_argument(
         "--symbols",
         nargs="+",
-        default=["EURUSD", "GBPUSD", "USDJPY"],
-        help="Trading symbols to stream"
+        default=None,  # Will use TRADING_PAIRS from .env
+        help="Trading symbols to stream (default: from TRADING_PAIRS in .env)"
     )
     parser.add_argument(
         "--interval",
@@ -296,6 +337,10 @@ def main():
 
     args = parser.parse_args()
 
+    # Use symbols from command line or from .env config
+    symbols = args.symbols if args.symbols else TRADING_PAIRS
+    logger.info(f"Symbols to stream: {symbols}")
+
     # Create and run bridge
     bridge = MT5Bridge(args.wsl_host, args.port)
 
@@ -303,7 +348,7 @@ def main():
         logger.error("Failed to connect to MT5")
         sys.exit(1)
 
-    bridge.run(args.symbols, args.interval)
+    bridge.run(symbols, args.interval)
 
 
 if __name__ == "__main__":

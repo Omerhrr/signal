@@ -3,9 +3,10 @@ Forex Probability Intelligence System - Configuration Settings
 MT5 Data Source Only
 """
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, field_validator
 from typing import List, Dict, Any
 from functools import lru_cache
+import os
 
 
 class Settings(BaseSettings):
@@ -28,9 +29,22 @@ class Settings(BaseSettings):
     redis_db: int = 0
     redis_password: str = ""
     
-    # Trading Pairs
+    # Trading Pairs - Read from environment (comma-separated string)
+    # Falls back to defaults if not set
     trading_pairs: List[str] = ["EURUSD", "GBPUSD", "USDJPY"]
     default_pair: str = "EURUSD"
+    
+    @field_validator('trading_pairs', mode='before')
+    @classmethod
+    def parse_trading_pairs(cls, v):
+        """Parse trading pairs from comma-separated string or list"""
+        if isinstance(v, str):
+            # Split by comma and strip whitespace
+            pairs = [p.strip().upper() for p in v.split(',') if p.strip()]
+            return pairs if pairs else ["EURUSD", "GBPUSD", "USDJPY"]
+        elif isinstance(v, list):
+            return [p.upper() if isinstance(p, str) else p for p in v]
+        return v
     
     # Model Settings
     xgboost_params: Dict[str, Any] = {

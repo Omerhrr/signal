@@ -6,7 +6,21 @@ This guide explains how to set up MT5 on Windows and connect it to your Forex Pr
 
 ## Quick Start
 
-### Step 1: Get WSL IP Address
+### Step 1: Configure Trading Pairs
+
+Edit the `.env` file in the project root to configure which pairs to trade:
+
+```bash
+# In .env file
+TRADING_PAIRS=EURUSD,GBPUSD,USDJPY,AUDUSD,XAUUSD
+```
+
+This configuration is used across the entire system:
+- Auto Scanner will scan these pairs
+- Market Radar will display these pairs
+- MT5 Windows Bridge will stream these pairs
+
+### Step 2: Get WSL IP Address
 
 ```bash
 # In WSL terminal
@@ -15,21 +29,21 @@ hostname -I
 
 Note the IP address (e.g., `21.0.7.148`).
 
-### Step 2: Install MT5 on Windows
+### Step 3: Install MT5 on Windows
 
 1. Download MT5 from your broker or [MetaQuotes](https://www.metatrader5.com/en/download)
 2. Install and open MT5
 3. Log in to your account (demo or live)
 
-### Step 3: Install Python Dependencies on Windows
+### Step 4: Install Python Dependencies on Windows
 
 Open Command Prompt on Windows:
 
 ```cmd
-pip install MetaTrader5 requests
+pip install MetaTrader5 requests python-dotenv
 ```
 
-### Step 4: Run the Bridge
+### Step 5: Run the Bridge
 
 On Windows, navigate to the project folder and run:
 
@@ -38,9 +52,11 @@ cd C:\Users\USER\Desktop\signal\forex-system
 python mt5_windows_bridge.py --wsl-host 21.0.7.148
 ```
 
-Replace `21.0.7.148` with your actual WSL IP from Step 1.
+Replace `21.0.7.148` with your actual WSL IP from Step 2.
 
-### Step 5: Start the WSL Backend
+**Note**: The bridge will automatically use the `TRADING_PAIRS` from the `.env` file. You can also override with `--symbols` flag.
+
+### Step 6: Start the WSL Backend
 
 In WSL:
 
@@ -134,21 +150,38 @@ Required:
 
 Optional:
   --port <PORT>         Backend port (default: 8000)
-  --symbols EURUSD GBPUSD USDJPY   Symbols to stream (default: EURUSD GBPUSD USDJPY)
+  --symbols EURUSD GBPUSD USDJPY   Symbols to stream (default: from TRADING_PAIRS in .env)
   --interval <SECONDS>  Tick interval (default: 1.0)
 ```
+
+**Configuration Priority**:
+1. Command-line `--symbols` flag (highest)
+2. `TRADING_PAIRS` in `.env` file
+3. Default: `EURUSD,GBPUSD,USDJPY`
 
 ### Example Commands
 
 ```cmd
-# Basic usage
+# Basic usage (uses TRADING_PAIRS from .env)
 python mt5_windows_bridge.py --wsl-host 21.0.7.148
 
-# With custom symbols
-python mt5_windows_bridge.py --wsl-host 21.0.7.148 --symbols EURUSD GBPUSD USDJPY XAUUSD
+# Override symbols for this session
+python mt5_windows_bridge.py --wsl-host 21.0.7.148 --symbols EURUSD GBPUSD XAUUSD
 
 # Faster tick rate
 python mt5_windows_bridge.py --wsl-host 21.0.7.148 --interval 0.5
+```
+
+### .env File Configuration
+
+Create/edit the `.env` file in the project root:
+
+```bash
+# Trading Pairs (comma-separated, used across all system components)
+TRADING_PAIRS=EURUSD,GBPUSD,USDJPY,AUDUSD,EURJPY,GBPJPY,XAUUSD
+
+# Default pair for single-pair analysis
+DEFAULT_PAIR=EURUSD
 ```
 
 ---
