@@ -111,59 +111,64 @@ class VolumeEngine:
     def analyze(self, symbol: str, ohlcv_data: List[OHLCV]) -> VolumeAnalysisResult:
         """Perform comprehensive volume analysis"""
         result = VolumeAnalysisResult()
-        
+
         if not ohlcv_data or len(ohlcv_data) < 10:
             return result
-            
-        # Extract volume data
-        volumes = np.array([c.volume for c in ohlcv_data])
-        closes = np.array([c.close for c in ohlcv_data])
-        highs = np.array([c.high for c in ohlcv_data])
-        lows = np.array([c.low for c in ohlcv_data])
-        opens = np.array([c.open for c in ohlcv_data])
-        
-        # Basic volume metrics
-        result.current_volume = volumes[-1]
-        result.avg_volume = np.mean(volumes[-20:]) if len(volumes) >= 20 else np.mean(volumes)
-        result.volume_ratio = result.current_volume / result.avg_volume if result.avg_volume > 0 else 1.0
-        
-        # Volume trend
-        result.volume_trend = self._analyze_volume_trend(volumes)
-        result.volume_momentum = self._calculate_volume_momentum(volumes)
-        
-        # Volume Profile Analysis
-        profile = self._build_volume_profile(closes, volumes, highs, lows)
-        result.high_volume_nodes = profile['hvn']
-        result.low_volume_nodes = profile['lvn']
-        result.poc_price = profile['poc']
-        
-        # Volume Spread Analysis (VSA)
-        result.volume_spread_analysis = self._analyze_volume_spread(
-            opens, highs, lows, closes, volumes
-        )
-        
-        # Accumulation/Distribution Detection
-        result.accumulation_detected = self._detect_accumulation(closes, volumes)
-        result.distribution_detected = self._detect_distribution(closes, volumes)
-        
-        # Volume Climax Detection
-        result.volume_climax = self._detect_volume_climax(volumes, closes)
-        
-        # Volume Divergence
-        result.volume_divergence = self._detect_volume_divergence(closes, volumes)
-        
-        # Volume Forecast
-        result.volume_forecast = self._forecast_volume(volumes)
-        result.volume_confidence = self._calculate_volume_confidence(volumes)
-        
-        # Trading signals
-        result.bullish_volume = self._is_bullish_volume(closes, volumes)
-        result.bearish_volume = self._is_bearish_volume(closes, volumes)
-        result.signal_strength = self._calculate_signal_strength(result)
-        
-        # Store history for tracking
-        self._update_history(symbol, volumes[-1], closes[-1])
-        
+
+        try:
+            # Extract volume data
+            volumes = np.array([c.volume for c in ohlcv_data])
+            closes = np.array([c.close for c in ohlcv_data])
+            highs = np.array([c.high for c in ohlcv_data])
+            lows = np.array([c.low for c in ohlcv_data])
+            opens = np.array([c.open for c in ohlcv_data])
+
+            # Basic volume metrics
+            result.current_volume = volumes[-1]
+            result.avg_volume = np.mean(volumes[-20:]) if len(volumes) >= 20 else np.mean(volumes)
+            result.volume_ratio = result.current_volume / result.avg_volume if result.avg_volume > 0 else 1.0
+
+            # Volume trend
+            result.volume_trend = self._analyze_volume_trend(volumes)
+            result.volume_momentum = self._calculate_volume_momentum(volumes)
+
+            # Volume Profile Analysis
+            profile = self._build_volume_profile(closes, volumes, highs, lows)
+            result.high_volume_nodes = profile['hvn']
+            result.low_volume_nodes = profile['lvn']
+            result.poc_price = profile['poc']
+
+            # Volume Spread Analysis (VSA)
+            result.volume_spread_analysis = self._analyze_volume_spread(
+                opens, highs, lows, closes, volumes
+            )
+
+            # Accumulation/Distribution Detection
+            result.accumulation_detected = self._detect_accumulation(closes, volumes)
+            result.distribution_detected = self._detect_distribution(closes, volumes)
+
+            # Volume Climax Detection
+            result.volume_climax = self._detect_volume_climax(volumes, closes)
+
+            # Volume Divergence
+            result.volume_divergence = self._detect_volume_divergence(closes, volumes)
+
+            # Volume Forecast
+            result.volume_forecast = self._forecast_volume(volumes)
+            result.volume_confidence = self._calculate_volume_confidence(volumes)
+
+            # Trading signals
+            result.bullish_volume = self._is_bullish_volume(closes, volumes)
+            result.bearish_volume = self._is_bearish_volume(closes, volumes)
+            result.signal_strength = self._calculate_signal_strength(result)
+
+            # Store history for tracking
+            self._update_history(symbol, volumes[-1], closes[-1])
+
+        except Exception as e:
+            logger.error(f"Volume analysis error for {symbol}: {e}")
+            # Return partial result
+
         return result
     
     def _analyze_volume_trend(self, volumes: np.ndarray) -> str:
@@ -186,9 +191,13 @@ class VolumeEngine:
         """Calculate volume momentum indicator"""
         if len(volumes) < 10:
             return 0.0
-        
+
         # Rate of change of volume
-        vol_roc = np.diff(volumes[-10:]) / volumes[-11:-1]
+        # np.diff reduces length by 1, so we need matching denominator
+        recent_volumes = volumes[-10:]
+        vol_roc = np.diff(recent_volumes) / recent_volumes[:-1]
+        # Replace any inf/nan from division by zero
+        vol_roc = np.where(np.isfinite(vol_roc), vol_roc, 0)
         return float(np.mean(vol_roc) * 100)
     
     def _build_volume_profile(
@@ -388,32 +397,38 @@ class VolumeEngine:
     
     def _is_bullish_volume(self, closes: np.ndarray, volumes: np.ndarray) -> bool:
         """Determine if volume pattern is bullish"""
-        if len(volumes) < 5:
+        if len(volumes) < 6:
             return False
-        
+
         # Bullish: higher volume on up candles
-        up_candles = closes[1:] > closes[:-1]
-        if np.sum(up_candles[-5:]) == 0:
+        price_changes = np.diff(closes[-6:])  # 5 elements
+        recent_volumes = volumes[-5:]  # 5 elements
+
+        up_mask = price_changes > 0
+        if np.sum(up_mask) == 0:
             return False
-        
-        up_vol = np.mean(volumes[1:][-5:][up_candles[-5:]])
-        total_vol = np.mean(volumes[-5:])
-        
+
+        up_vol = np.mean(recent_volumes[up_mask])
+        total_vol = np.mean(recent_volumes)
+
         return up_vol > total_vol * 1.2
-    
+
     def _is_bearish_volume(self, closes: np.ndarray, volumes: np.ndarray) -> bool:
         """Determine if volume pattern is bearish"""
-        if len(volumes) < 5:
+        if len(volumes) < 6:
             return False
-        
+
         # Bearish: higher volume on down candles
-        down_candles = closes[1:] < closes[:-1]
-        if np.sum(down_candles[-5:]) == 0:
+        price_changes = np.diff(closes[-6:])  # 5 elements
+        recent_volumes = volumes[-5:]  # 5 elements
+
+        down_mask = price_changes < 0
+        if np.sum(down_mask) == 0:
             return False
-        
-        down_vol = np.mean(volumes[1:][-5:][down_candles[-5:]])
-        total_vol = np.mean(volumes[-5:])
-        
+
+        down_vol = np.mean(recent_volumes[down_mask])
+        total_vol = np.mean(recent_volumes)
+
         return down_vol > total_vol * 1.2
     
     def _calculate_signal_strength(self, result: VolumeAnalysisResult) -> float:
