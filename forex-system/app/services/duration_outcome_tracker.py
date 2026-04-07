@@ -10,8 +10,24 @@ from loguru import logger
 from collections import deque
 import json
 import os
+from pathlib import Path
 
 from app.engines.duration_predictor import DurationSignal, duration_predictor
+
+
+def get_project_root() -> Path:
+    """Get the project root directory dynamically"""
+    # Try to find the project root by looking for characteristic files
+    current = Path(__file__).resolve().parent
+    
+    # Walk up the directory tree to find the project root
+    while current != current.parent:
+        if (current / "app").exists() and (current / "config").exists():
+            return current
+        current = current.parent
+    
+    # Fallback to current working directory
+    return Path.cwd()
 
 
 @dataclass
@@ -60,8 +76,9 @@ class DurationOutcomeTracker:
         # Data pipeline reference
         self._data_pipeline = None
         
-        # Persistence
-        self._storage_file = "/home/z/my-project/forex-system/data/duration_signals.json"
+        # Persistence - use dynamic path
+        project_root = get_project_root()
+        self._storage_file = str(project_root / "data" / "duration_signals.json")
         self._ensure_storage_dir()
         
     def _ensure_storage_dir(self):
