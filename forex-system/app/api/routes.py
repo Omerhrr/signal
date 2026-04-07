@@ -620,23 +620,40 @@ from app.engines.hmm_model import regime_analyzer
 @app.get("/api/hmm/regime", tags=["HMM"])
 async def get_hmm_regime(symbol: str = Query("EURUSD")):
     """Get HMM regime analysis for a symbol"""
-    ohlcv = await data_pipeline.get_ohlcv(symbol, "M15", 100)
-    
-    if not ohlcv or len(ohlcv) < 20:
+    try:
+        ohlcv = await data_pipeline.get_ohlcv(symbol, "M15", 100)
+        
+        if not ohlcv or len(ohlcv) < 20:
+            return {
+                "current_state": {
+                    "regime": "unknown",
+                    "probability": 0,
+                    "transition_probabilities": {},
+                    "confidence": 0,
+                    "duration_expected": 0
+                },
+                "forecasts": [],
+                "stability": {"score": 0},
+                "trading_implications": {}
+            }
+        
+        analysis = regime_analyzer.analyze(ohlcv)
+        return analysis
+        
+    except Exception as e:
+        logger.error(f"HMM regime error: {e}")
         return {
             "current_state": {
                 "regime": "unknown",
                 "probability": 0,
                 "transition_probabilities": {},
-                "confidence": 0
+                "confidence": 0,
+                "duration_expected": 0
             },
             "forecasts": [],
             "stability": {"score": 0},
             "trading_implications": {}
         }
-    
-    analysis = regime_analyzer.analyze(ohlcv)
-    return analysis
 
 
 # ============== MCMC Probability Estimation ==============
@@ -647,62 +664,92 @@ from app.engines.feature_engine import feature_engine
 @app.get("/api/mcmc/estimate", tags=["MCMC"])
 async def get_mcmc_estimate(symbol: str = Query("EURUSD")):
     """Get MCMC probability estimates for a symbol"""
-    ohlcv = await data_pipeline.get_ohlcv(symbol, "M15", 100)
-    
-    if not ohlcv or len(ohlcv) < 50:
+    try:
+        ohlcv = await data_pipeline.get_ohlcv(symbol, "M15", 100)
+        
+        if not ohlcv or len(ohlcv) < 50:
+            return {
+                "direction_probability": {"mean": 0.5, "std": 0.2, "ci_95": [0.3, 0.7], "uncertainty": 0.4},
+                "duration_probability": {"mean": 10, "std": 5, "ci_95": [3, 25]},
+                "volatility_forecast": {"mean": 0.01, "std": 0.005, "ci_95": [0.005, 0.02]},
+                "regime_probability": {},
+                "confidence_score": 0.3,
+                "effective_sample_size": 100,
+                "convergence_metric": 0.5
+            }
+        
+        # Calculate features
+        features = feature_engine.calculate_features(symbol, ohlcv)
+        
+        # Get direction prediction from decision engine
+        direction_pred = decision_engine.direction_model.predict(features)
+        duration_pred = decision_engine.duration_model.predict(features, direction_pred.predicted_direction)
+        
+        # Get regime probabilities
+        regime_analysis = regime_analyzer.analyze(ohlcv)
+        regime_probs = regime_analysis.get('current_state', {}).get('transition_probabilities', {})
+        
+        # Get MCMC estimates
+        mcmc_result = mcmc_engine.estimate_probabilities(
+            features,
+            direction_pred.confidence,
+            duration_pred.expected_time_above_minutes,
+            regime_probs
+        )
+        
+        return mcmc_result.to_dict()
+        
+    except Exception as e:
+        logger.error(f"MCMC estimate error: {e}")
         return {
             "direction_probability": {"mean": 0.5, "std": 0.2, "ci_95": [0.3, 0.7], "uncertainty": 0.4},
             "duration_probability": {"mean": 10, "std": 5, "ci_95": [3, 25]},
+            "volatility_forecast": {"mean": 0.01, "std": 0.005, "ci_95": [0.005, 0.02]},
+            "regime_probability": {},
             "confidence_score": 0.3,
-            "convergence_metric": 0.5,
-            "regime_probability": {}
+            "effective_sample_size": 100,
+            "convergence_metric": 0.5
         }
-    
-    # Calculate features
-    features = feature_engine.calculate_features(symbol, ohlcv)
-    
-    # Get direction prediction from decision engine
-    direction_pred = decision_engine.direction_model.predict(features)
-    duration_pred = decision_engine.duration_model.predict(features, direction_pred.predicted_direction)
-    
-    # Get regime probabilities
-    regime_analysis = regime_analyzer.analyze(ohlcv)
-    regime_probs = regime_analysis.get('current_state', {}).get('transition_probabilities', {})
-    
-    # Get MCMC estimates
-    mcmc_result = mcmc_engine.estimate_probabilities(
-        features,
-        direction_pred.confidence,
-        duration_pred.expected_time_above_minutes,
-        regime_probs
-    )
-    
-    return mcmc_result.to_dict()
 
 
 @app.get("/api/uncertainty/quantify", tags=["MCMC"])
 async def quantify_uncertainty(symbol: str = Query("EURUSD")):
     """Quantify prediction uncertainty"""
-    ohlcv = await data_pipeline.get_ohlcv(symbol, "M15", 100)
-    
-    if not ohlcv or len(ohlcv) < 50:
+    try:
+        ohlcv = await data_pipeline.get_ohlcv(symbol, "M15", 100)
+        
+        if not ohlcv or len(ohlcv) < 50:
+            return {
+                "total_uncertainty": 0.5,
+                "epistemic_uncertainty": 0.3,
+                "aleatoric_uncertainty": 0.2,
+                "confidence_bounds": {"lower_90": 0.3, "upper_90": 0.7, "width": 0.4},
+                "prediction_quality": "low",
+                "recommendation": "Insufficient data"
+            }
+        
+        features = feature_engine.calculate_features(symbol, ohlcv)
+        direction_pred = decision_engine.direction_model.predict(features)
+        duration_pred = decision_engine.duration_model.predict(features, direction_pred.predicted_direction)
+        
+        uncertainty = uncertainty_quantifier.quantify_uncertainty(
+            direction_pred.confidence,
+            duration_pred.expected_time_above_minutes,
+            features
+        )
+        
+        return uncertainty
+        
+    except Exception as e:
+        logger.error(f"Uncertainty quantification error: {e}")
         return {
             "total_uncertainty": 0.5,
             "epistemic_uncertainty": 0.3,
             "aleatoric_uncertainty": 0.2,
-            "prediction_quality": "low"
+            "confidence_bounds": {"lower_90": 0.3, "upper_90": 0.7, "width": 0.4},
+            "prediction_quality": "low",
+            "recommendation": "Error in calculation"
         }
-    
-    features = feature_engine.calculate_features(symbol, ohlcv)
-    direction_pred = decision_engine.direction_model.predict(features)
-    
-    uncertainty = uncertainty_quantifier.quantify_uncertainty(
-        direction_pred.confidence,
-        duration_pred.expected_time_above_minutes,
-        features
-    )
-    
-    return uncertainty
 
 
 # Run with: uvicorn app.api.routes:app --reload --host 0.0.0.0 --port 8000
