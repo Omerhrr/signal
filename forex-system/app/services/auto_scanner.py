@@ -46,6 +46,14 @@ class ScanResult:
     features_score: float = 0.0
     message: str = ""
     signal_id: Optional[str] = None
+    # Entry/Exit details
+    entry_price: float = 0.0
+    entry_zone_start: float = 0.0
+    entry_zone_end: float = 0.0
+    stop_loss: float = 0.0
+    take_profit: float = 0.0
+    expected_duration_minutes: float = 0.0
+    risk_reward_ratio: float = 0.0
 
 
 @dataclass
@@ -114,6 +122,9 @@ class AutoScanner:
         self.scan_results: Dict[str, MultiTimeframeAnalysis] = {}
         self.recent_signals: deque = deque(maxlen=100)
         self.scan_history: deque = deque(maxlen=1000)
+        
+        # Store actual signal objects for detailed info
+        self._generated_signals: Dict[str, TradingSignal] = {}
         
         # Configuration
         self.scan_interval_seconds = 30  # Scan every 30 seconds
@@ -393,6 +404,18 @@ class AutoScanner:
                     result.signal_id = signal.signal_id
                     result.message = f"Signal generated: {signal.bias.value}"
                     
+                    # Fill in entry/exit details
+                    result.entry_price = tick.bid
+                    result.entry_zone_start = signal.entry_zone_start
+                    result.entry_zone_end = signal.entry_zone_end
+                    result.stop_loss = signal.stop_loss
+                    result.take_profit = signal.take_profit
+                    result.expected_duration_minutes = signal.expected_duration_minutes
+                    result.risk_reward_ratio = signal.risk_reward_ratio
+                    
+                    # Store the full signal for later retrieval
+                    self._generated_signals[signal.signal_id] = signal
+                    
                     # Track signal with market state
                     signal_tracker.record_signal(signal, market_state)
                 else:
@@ -436,7 +459,10 @@ class AutoScanner:
         
         for symbol, analysis in self.scan_results.items():
             if analysis.best_confidence >= self.min_signal_confidence:
-                signals.append({
+                # Get entry/exit details from best timeframe's signal
+                best_tf_result = analysis.timeframes.get(analysis.best_timeframe)
+                
+                signal_data = {
                     "symbol": symbol,
                     "timeframe": analysis.best_timeframe,
                     "bias": analysis.consensus_bias.value,
@@ -445,7 +471,20 @@ class AutoScanner:
                     "bullish_tf": analysis.bullish_count,
                     "bearish_tf": analysis.bearish_count,
                     "timestamp": analysis.timestamp.isoformat()
-                })
+                }
+                
+                # Add entry/exit details if available
+                if best_tf_result and best_tf_result.signal_generated:
+                    signal_data["entry_price"] = best_tf_result.entry_price
+                    signal_data["entry_zone_start"] = best_tf_result.entry_zone_start
+                    signal_data["entry_zone_end"] = best_tf_result.entry_zone_end
+                    signal_data["stop_loss"] = best_tf_result.stop_loss
+                    signal_data["take_profit"] = best_tf_result.take_profit
+                    signal_data["expected_duration_minutes"] = best_tf_result.expected_duration_minutes
+                    signal_data["risk_reward_ratio"] = best_tf_result.risk_reward_ratio
+                    signal_data["signal_id"] = best_tf_result.signal_id
+                
+                signals.append(signal_data)
                 
         # Sort by confidence
         signals.sort(key=lambda x: x["confidence"], reverse=True)
@@ -457,7 +496,10 @@ class AutoScanner:
         
         for symbol, analysis in self.scan_results.items():
             if analysis.confluence_score >= min_confluence and analysis.best_confidence >= self.min_signal_confidence:
-                signals.append({
+                # Get entry/exit details from best timeframe's signal
+                best_tf_result = analysis.timeframes.get(analysis.best_timeframe)
+                
+                signal_data = {
                     "symbol": symbol,
                     "consensus_bias": analysis.consensus_bias.value,
                     "consensus_strength": analysis.consensus_strength,
@@ -469,7 +511,20 @@ class AutoScanner:
                         "bearish": analysis.bearish_count,
                         "neutral": analysis.neutral_count
                     }
-                })
+                }
+                
+                # Add entry/exit details if available
+                if best_tf_result and best_tf_result.signal_generated:
+                    signal_data["entry_price"] = best_tf_result.entry_price
+                    signal_data["entry_zone_start"] = best_tf_result.entry_zone_start
+                    signal_data["entry_zone_end"] = best_tf_result.entry_zone_end
+                    signal_data["stop_loss"] = best_tf_result.stop_loss
+                    signal_data["take_profit"] = best_tf_result.take_profit
+                    signal_data["expected_duration_minutes"] = best_tf_result.expected_duration_minutes
+                    signal_data["risk_reward_ratio"] = best_tf_result.risk_reward_ratio
+                    signal_data["signal_id"] = best_tf_result.signal_id
+                
+                signals.append(signal_data)
                 
         signals.sort(key=lambda x: x["confluence_score"], reverse=True)
         return signals

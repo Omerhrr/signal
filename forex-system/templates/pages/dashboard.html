@@ -205,7 +205,7 @@
                 <div class="px-3 md:px-4 py-3 border-b border-gray-200 dark:border-gray-700">
                     <h2 class="text-base md:text-lg font-semibold text-gray-900 dark:text-white">Top Signals</h2>
                 </div>
-                <div class="p-2 md:p-4 space-y-2 md:space-y-3 max-h-64 overflow-y-auto">
+                <div class="p-2 md:p-4 space-y-2 md:space-y-3 max-h-80 overflow-y-auto">
                     <template x-for="signal in topSignals" :key="signal.symbol + signal.timeframe">
                         <div class="p-2 md:p-3 rounded-lg border text-xs md:text-sm"
                              :class="signal.bias === 'BUY' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-red-500 bg-red-50 dark:bg-red-900/20'">
@@ -226,6 +226,33 @@
                                 <div>
                                     <span class="text-gray-500 dark:text-gray-400">Fluence: </span>
                                     <span class="font-medium" x-text="(signal.confluence * 100).toFixed(0) + '%'"></span>
+                                </div>
+                            </div>
+                            <!-- Entry/Exit Details -->
+                            <div x-show="signal.entry_price" class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600 space-y-1 text-xs">
+                                <div class="grid grid-cols-2 gap-1">
+                                    <div>
+                                        <span class="text-gray-500 dark:text-gray-400">Entry: </span>
+                                        <span class="font-medium text-gray-900 dark:text-white" x-text="signal.entry_price?.toFixed(5) || '---'"></span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500 dark:text-gray-400">Duration: </span>
+                                        <span class="font-medium text-gray-900 dark:text-white" x-text="signal.expected_duration_minutes ? signal.expected_duration_minutes.toFixed(0) + ' min' : '---'"></span>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-1">
+                                    <div>
+                                        <span class="text-gray-500 dark:text-gray-400">SL: </span>
+                                        <span class="font-medium text-red-600" x-text="signal.stop_loss?.toFixed(5) || '---'"></span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500 dark:text-gray-400">TP: </span>
+                                        <span class="font-medium text-green-600" x-text="signal.take_profit?.toFixed(5) || '---'"></span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <span class="text-gray-500 dark:text-gray-400">R:R: </span>
+                                    <span class="font-medium text-blue-600" x-text="signal.risk_reward_ratio?.toFixed(2) || '---'"></span>
                                 </div>
                             </div>
                         </div>
@@ -317,15 +344,66 @@
             <span class="text-xs md:text-sm text-gray-500 dark:text-gray-400" x-text="confluenceSignals.length + ' signals'"></span>
         </div>
         <div class="p-2 md:p-4 overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-xs md:text-sm">
+            <!-- Mobile Card View -->
+            <div class="md:hidden space-y-2">
+                <template x-for="signal in confluenceSignals" :key="signal.symbol">
+                    <div class="p-3 rounded-lg border"
+                         :class="signal.consensus_bias === 'BUY' ? 'border-green-200 bg-green-50 dark:bg-green-900/10' : 'border-red-200 bg-red-50 dark:bg-red-900/10'">
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <span class="font-bold text-gray-900 dark:text-white" x-text="signal.symbol"></span>
+                                <span class="px-1.5 py-0.5 text-xs font-semibold rounded ml-1"
+                                      :class="signal.consensus_bias === 'BUY' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
+                                      x-text="signal.consensus_bias"></span>
+                            </div>
+                            <span class="text-xs text-gray-500" x-text="signal.best_timeframe"></span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs mb-2">
+                            <div>
+                                <span class="text-gray-500">Confidence:</span>
+                                <span class="font-medium ml-1" x-text="(signal.best_confidence * 100).toFixed(0) + '%'"></span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">Confluence:</span>
+                                <span class="font-medium ml-1" x-text="(signal.confluence_score * 100).toFixed(0) + '%'"></span>
+                            </div>
+                        </div>
+                        <div x-show="signal.entry_price" class="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-gray-200 dark:border-gray-600">
+                            <div>
+                                <span class="text-gray-500">Entry:</span>
+                                <span class="font-medium ml-1" x-text="signal.entry_price?.toFixed(5)"></span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">Duration:</span>
+                                <span class="font-medium ml-1" x-text="signal.expected_duration_minutes?.toFixed(0) + ' min'"></span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">SL:</span>
+                                <span class="font-medium text-red-600 ml-1" x-text="signal.stop_loss?.toFixed(5)"></span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">TP:</span>
+                                <span class="font-medium text-green-600 ml-1" x-text="signal.take_profit?.toFixed(5)"></span>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            
+            <!-- Desktop Table View -->
+            <table class="hidden md:table min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-xs md:text-sm">
                 <thead>
                     <tr>
                         <th class="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Symbol</th>
                         <th class="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Bias</th>
-                        <th class="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden sm:table-cell">Best TF</th>
+                        <th class="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Best TF</th>
                         <th class="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Confidence</th>
-                        <th class="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden md:table-cell">Confluence</th>
-                        <th class="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden lg:table-cell">TF Alignment</th>
+                        <th class="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Confluence</th>
+                        <th class="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden lg:table-cell">Entry</th>
+                        <th class="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden lg:table-cell">SL</th>
+                        <th class="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden lg:table-cell">TP</th>
+                        <th class="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden xl:table-cell">Duration</th>
+                        <th class="px-2 md:px-4 py-2 md:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden xl:table-cell">TF Align</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -337,7 +415,7 @@
                                       :class="signal.consensus_bias === 'BUY' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
                                       x-text="signal.consensus_bias"></span>
                             </td>
-                            <td class="px-2 md:px-4 py-2 md:py-3 text-gray-600 dark:text-gray-400 hidden sm:table-cell" x-text="signal.best_timeframe"></td>
+                            <td class="px-2 md:px-4 py-2 md:py-3 text-gray-600 dark:text-gray-400" x-text="signal.best_timeframe"></td>
                             <td class="px-2 md:px-4 py-2 md:py-3">
                                 <div class="flex items-center space-x-1 md:space-x-2">
                                     <div class="w-10 md:w-16 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -348,13 +426,15 @@
                                     <span class="text-gray-600 dark:text-gray-400" x-text="(signal.best_confidence * 100).toFixed(0) + '%'"></span>
                                 </div>
                             </td>
-                            <td class="px-2 md:px-4 py-2 md:py-3 text-gray-600 dark:text-gray-400 hidden md:table-cell" x-text="(signal.confluence_score * 100).toFixed(0) + '%'"></td>
-                            <td class="px-2 md:px-4 py-2 md:py-3 hidden lg:table-cell">
+                            <td class="px-2 md:px-4 py-2 md:py-3 text-gray-600 dark:text-gray-400" x-text="(signal.confluence_score * 100).toFixed(0) + '%'"></td>
+                            <td class="px-2 md:px-4 py-2 md:py-3 text-gray-900 dark:text-white hidden lg:table-cell" x-text="signal.entry_price?.toFixed(5) || '---'"></td>
+                            <td class="px-2 md:px-4 py-2 md:py-3 text-red-600 hidden lg:table-cell" x-text="signal.stop_loss?.toFixed(5) || '---'"></td>
+                            <td class="px-2 md:px-4 py-2 md:py-3 text-green-600 hidden lg:table-cell" x-text="signal.take_profit?.toFixed(5) || '---'"></td>
+                            <td class="px-2 md:px-4 py-2 md:py-3 text-gray-600 dark:text-gray-400 hidden xl:table-cell" x-text="signal.expected_duration_minutes ? signal.expected_duration_minutes.toFixed(0) + ' min' : '---'"></td>
+                            <td class="px-2 md:px-4 py-2 md:py-3 hidden xl:table-cell">
                                 <span class="text-green-600" x-text="signal.timeframe_alignment.bullish"></span>
                                 <span class="text-gray-400"> / </span>
                                 <span class="text-red-600" x-text="signal.timeframe_alignment.bearish"></span>
-                                <span class="text-gray-400"> / </span>
-                                <span class="text-gray-600 dark:text-gray-400" x-text="signal.timeframe_alignment.neutral"></span>
                             </td>
                         </tr>
                     </template>
