@@ -867,6 +867,10 @@ from app.services.auto_scanner import auto_scanner
 # Set data pipeline reference
 auto_scanner.set_data_pipeline(data_pipeline)
 
+# Set duration outcome tracker reference (for automatic signal tracking)
+from app.services.duration_outcome_tracker import duration_outcome_tracker
+auto_scanner.set_outcome_tracker(duration_outcome_tracker)
+
 
 @app.get("/api/scanner/status", tags=["Scanner"])
 async def get_scanner_status():

@@ -1,6 +1,7 @@
 """
 Forex Probability Intelligence System - Auto Scanner Service
 Continuously scans all symbols across multiple timeframes for signals
+Integrated with Duration Predictor for accurate time-based predictions
 """
 import asyncio
 from datetime import datetime, timezone, timedelta
@@ -15,6 +16,7 @@ from app.engines.decision_engine import decision_engine
 from app.engines.feature_engine import feature_engine
 from app.engines.direction_model import direction_model
 from app.engines.duration_model import duration_model
+from app.engines.duration_predictor import duration_predictor, DurationSignal
 from app.services.signal_tracker import signal_tracker
 from config.settings import get_settings
 
@@ -142,6 +144,13 @@ class AutoScanner:
         
         # Data pipeline reference
         self._data_pipeline = None
+
+        # Duration outcome tracker reference (set externally)
+        self._outcome_tracker = None
+
+    def set_outcome_tracker(self, tracker):
+        """Set the duration outcome tracker reference"""
+        self._outcome_tracker = tracker
         
     def set_data_pipeline(self, pipeline):
         """Set the data pipeline reference"""
@@ -398,12 +407,12 @@ class AutoScanner:
             if direction_pred.confidence >= self.min_signal_confidence:
                 # Generate signal through decision engine
                 signal = decision_engine.generate_signal(symbol, ohlcv, tick, market_state)
-                
+
                 if signal:
                     result.signal_generated = True
                     result.signal_id = signal.signal_id
                     result.message = f"Signal generated: {signal.bias.value}"
-                    
+
                     # Fill in entry/exit details
                     result.entry_price = tick.bid
                     result.entry_zone_start = signal.entry_zone_start
@@ -412,12 +421,38 @@ class AutoScanner:
                     result.take_profit = signal.take_profit
                     result.expected_duration_minutes = signal.expected_duration_minutes
                     result.risk_reward_ratio = signal.risk_reward_ratio
-                    
+
                     # Store the full signal for later retrieval
                     self._generated_signals[signal.signal_id] = signal
-                    
+
                     # Track signal with market state
                     signal_tracker.record_signal(signal, market_state)
+
+                    # === DURATION SIGNAL INTEGRATION ===
+                    # Also generate a duration-based signal and track it
+                    try:
+                        volatility = market_state.get('volatility', 0) if market_state else 0
+                        session = market_state.get('session', 'unknown') if market_state else 'unknown'
+
+                        duration_signal = duration_predictor.generate_signal(
+                            symbol=symbol,
+                            ohlcv_data=ohlcv,
+                            current_price=tick.bid,
+                            volatility=volatility,
+                            session=session,
+                            min_confidence=0.55,  # Lower threshold for duration signals
+                            max_noise=0.5
+                        )
+
+                        if duration_signal and self._outcome_tracker:
+                            # Add to outcome tracker for automatic win/loss tracking
+                            self._outcome_tracker.add_signal(duration_signal)
+                            logger.info(
+                                f"Duration signal tracked: {duration_signal.signal_id} - "
+                                f"{symbol} {duration_signal.direction.value} for {duration_signal.duration_minutes}min"
+                            )
+                    except Exception as e:
+                        logger.error(f"Error generating duration signal: {e}")
                 else:
                     result.message = "Criteria not met"
             else:
