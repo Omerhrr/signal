@@ -56,24 +56,24 @@ class VolumeAnalysisResult:
     
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "current_volume": self.current_volume,
-            "avg_volume": self.avg_volume,
-            "volume_ratio": self.volume_ratio,
+            "current_volume": float(self.current_volume),
+            "avg_volume": float(self.avg_volume),
+            "volume_ratio": float(self.volume_ratio),
             "volume_trend": self.volume_trend,
-            "volume_momentum": self.volume_momentum,
+            "volume_momentum": float(self.volume_momentum),
             "high_volume_nodes": self.high_volume_nodes[:5],
             "low_volume_nodes": self.low_volume_nodes[:5],
-            "poc_price": self.poc_price,
+            "poc_price": float(self.poc_price),
             "volume_spread_analysis": self.volume_spread_analysis,
-            "accumulation_detected": self.accumulation_detected,
-            "distribution_detected": self.distribution_detected,
-            "volume_climax": self.volume_climax,
-            "volume_divergence": self.volume_divergence,
-            "volume_forecast": self.volume_forecast,
-            "volume_confidence": self.volume_confidence,
-            "bullish_volume": self.bullish_volume,
-            "bearish_volume": self.bearish_volume,
-            "signal_strength": self.signal_strength
+            "accumulation_detected": bool(self.accumulation_detected),
+            "distribution_detected": bool(self.distribution_detected),
+            "volume_climax": bool(self.volume_climax),
+            "volume_divergence": bool(self.volume_divergence),
+            "volume_forecast": float(self.volume_forecast),
+            "volume_confidence": float(self.volume_confidence),
+            "bullish_volume": bool(self.bullish_volume),
+            "bearish_volume": bool(self.bearish_volume),
+            "signal_strength": float(self.signal_strength)
         }
 
 
@@ -91,12 +91,12 @@ class VolumePrediction:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "direction_bias": self.direction_bias.value,
-            "confidence": self.confidence,
-            "expected_volume_change": self.expected_volume_change,
-            "breakout_probability": self.breakout_probability,
-            "reversal_probability": self.reversal_probability,
-            "volume_support": self.volume_support,
-            "volume_resistance": self.volume_resistance
+            "confidence": float(self.confidence),
+            "expected_volume_change": float(self.expected_volume_change),
+            "breakout_probability": float(self.breakout_probability),
+            "reversal_probability": float(self.reversal_probability),
+            "volume_support": float(self.volume_support),
+            "volume_resistance": float(self.volume_resistance)
         }
 
 
@@ -242,9 +242,9 @@ class VolumeEngine:
         
         for price, vol in volume_at_price.items():
             node = {
-                "price": round(price, 5),
+                "price": float(round(price, 5)),
                 "volume": int(vol),
-                "percentage": round(vol / max_volume * 100, 1)
+                "percentage": float(round(vol / max_volume * 100, 1))
             }
             
             if vol > avg_volume * 1.5:

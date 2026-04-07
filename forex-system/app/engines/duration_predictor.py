@@ -176,8 +176,9 @@ class DurationPredictor:
 
         # Price features - fix array shapes
         if len(closes) >= 21:
-            features['returns'] = np.diff(closes[-21:]) / closes[-22:-1]
-            features['log_returns'] = np.log(closes[-21:] / closes[-22:-1])
+            # np.diff reduces length by 1, so we need matching denominator
+            features['returns'] = np.diff(closes[-21:]) / closes[-21:-1]  # 20 elements each
+            features['log_returns'] = np.log(closes[-21:] / closes[-22:-1])  # 21 elements each
         elif len(closes) >= 2:
             features['returns'] = np.diff(closes) / closes[:-1]
             features['log_returns'] = np.log(closes[1:] / closes[:-1])
@@ -579,7 +580,8 @@ class DurationPredictor:
             return "unknown"
         
         closes = np.array([c.close for c in ohlcv_data])
-        returns = np.diff(closes[-20:]) / closes[-21:-1]
+        # Fix: np.diff gives 19 elements, need matching denominator
+        returns = np.diff(closes[-20:]) / closes[-20:-1]  # Both have 19 elements
         
         volatility = np.std(returns)
         trend = (closes[-1] - closes[-20]) / closes[-20]
