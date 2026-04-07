@@ -5,13 +5,65 @@
 {% block content %}
 <div x-data="dashboardApp()" x-init="init()">
     <!-- Header -->
-    <div class="mb-6">
-        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Trading Dashboard</h1>
-        <p class="text-gray-600 dark:text-gray-400 mt-1">Real-time forex probability intelligence</p>
+    <div class="mb-6 flex justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Trading Dashboard</h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-1">Real-time forex probability intelligence</p>
+        </div>
+        <!-- Scanner Controls -->
+        <div class="flex items-center space-x-3">
+            <div class="flex items-center space-x-2">
+                <span class="text-sm text-gray-600 dark:text-gray-400">Auto-Scan:</span>
+                <button @click="toggleScanner()" 
+                        :class="scannerRunning ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'"
+                        class="px-4 py-2 text-white text-sm rounded-lg flex items-center space-x-2 transition-colors">
+                    <span x-show="scannerRunning" class="flex items-center">
+                        <span class="w-2 h-2 bg-white rounded-full animate-pulse mr-2"></span>
+                        Stop Scanner
+                    </span>
+                    <span x-show="!scannerRunning">Start Scanner</span>
+                </button>
+            </div>
+            <button @click="scanNow()" :disabled="scanning" 
+                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg flex items-center space-x-2 disabled:opacity-50">
+                <svg x-show="!scanning" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                <span x-text="scanning ? 'Scanning...' : 'Scan Now'"></span>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Scanner Status Bar -->
+    <div class="mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-6">
+                <div class="flex items-center space-x-2">
+                    <span class="w-3 h-3 rounded-full" :class="scannerRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-400'"></span>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300" x-text="scannerStatus"></span>
+                </div>
+                <div class="text-sm text-gray-600 dark:text-gray-400">
+                    <span>Symbols: </span>
+                    <span class="font-medium" x-text="scannerSymbols"></span>
+                </div>
+                <div class="text-sm text-gray-600 dark:text-gray-400">
+                    <span>Timeframes: </span>
+                    <span class="font-medium">M5, M15, M30, H1, H4, D1</span>
+                </div>
+                <div class="text-sm text-gray-600 dark:text-gray-400">
+                    <span>Scan Interval: </span>
+                    <span class="font-medium" x-text="scanInterval + 's'"></span>
+                </div>
+            </div>
+            <div class="text-sm text-gray-600 dark:text-gray-400">
+                <span>Last Scan: </span>
+                <span class="font-medium" x-text="lastScanTime"></span>
+            </div>
+        </div>
     </div>
     
     <!-- Stats Row -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
         <!-- Active Signals -->
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border border-gray-200 dark:border-gray-700">
             <div class="flex items-center justify-between">
@@ -57,6 +109,21 @@
             </div>
         </div>
         
+        <!-- High Confluence -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border border-gray-200 dark:border-gray-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">High Confluence</p>
+                    <p class="text-2xl font-bold text-purple-600 dark:text-purple-400" x-text="highConfluenceCount">0</p>
+                </div>
+                <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                    <svg class="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+        
         <!-- Market Sentiment -->
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border border-gray-200 dark:border-gray-700">
             <div class="flex items-center justify-between">
@@ -76,81 +143,64 @@
     
     <!-- Main Grid -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Signal Cards -->
+        <!-- Scanner Results - Multi-Timeframe Analysis -->
         <div class="lg:col-span-2">
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
                 <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Active Signals</h2>
-                    <button @click="generateSignal()" :disabled="generating" 
-                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg flex items-center space-x-2 disabled:opacity-50">
-                        <svg x-show="!generating" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                        </svg>
-                        <svg x-show="generating" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                        </svg>
-                        <span x-text="generating ? 'Generating...' : 'Generate Signal'"></span>
-                    </button>
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Multi-Timeframe Scanner</h2>
+                    <span class="text-sm text-gray-500 dark:text-gray-400" x-text="'Scanning ' + Object.keys(scannerResults).length + ' symbols'"></span>
                 </div>
-                <div class="p-4 space-y-3" id="signals-container">
-                    <template x-for="signal in activeSignals" :key="signal.signal_id">
-                        <div class="signal-card rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
-                             :class="signal.bias === 'BUY' ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-red-500'">
-                            <div class="p-4">
-                                <div class="flex justify-between items-start mb-3">
-                                    <div class="flex items-center space-x-3">
-                                        <span class="px-2 py-1 text-xs font-semibold rounded"
-                                              :class="signal.bias === 'BUY' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'"
-                                              x-text="signal.bias"></span>
-                                        <span class="font-bold text-gray-900 dark:text-white" x-text="signal.symbol"></span>
-                                    </div>
-                                    <span class="px-2 py-1 text-xs rounded-full"
-                                          :style="'background-color: ' + signal.status_color + '20; color: ' + signal.status_color"
-                                          x-text="signal.status"></span>
+                <div class="p-4 space-y-4" id="scanner-container">
+                    <template x-for="(analysis, symbol) in scannerResults" :key="symbol">
+                        <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                            <!-- Symbol Header -->
+                            <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700/50 flex justify-between items-center">
+                                <div class="flex items-center space-x-3">
+                                    <span class="font-bold text-lg text-gray-900 dark:text-white" x-text="symbol"></span>
+                                    <span class="px-2 py-1 text-xs font-semibold rounded"
+                                          :class="analysis.consensus_bias === 'BUY' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 
+                                                  analysis.consensus_bias === 'SELL' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 
+                                                  'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'"
+                                          x-text="analysis.consensus_bias"></span>
                                 </div>
-                                
-                                <div class="grid grid-cols-2 gap-4 text-sm">
-                                    <div>
-                                        <p class="text-gray-500 dark:text-gray-400">Entry Zone</p>
-                                        <p class="font-medium text-gray-900 dark:text-white" x-text="signal.entry_zone"></p>
+                                <div class="flex items-center space-x-4 text-sm">
+                                    <div class="flex items-center space-x-1">
+                                        <span class="text-green-600 dark:text-green-400" x-text="analysis.bullish_count"></span>
+                                        <span class="text-gray-400">/</span>
+                                        <span class="text-red-600 dark:text-red-400" x-text="analysis.bearish_count"></span>
                                     </div>
-                                    <div>
-                                        <p class="text-gray-500 dark:text-gray-400">Expected Duration</p>
-                                        <p class="font-medium text-gray-900 dark:text-white" x-text="signal.expected_duration"></p>
+                                    <div class="text-gray-600 dark:text-gray-400">
+                                        Confluence: <span class="font-medium" x-text="(analysis.confluence_score * 100).toFixed(0) + '%'"></span>
                                     </div>
-                                    <div>
-                                        <p class="text-gray-500 dark:text-gray-400">Confidence</p>
-                                        <div class="flex items-center space-x-2">
-                                            <div class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                                <div class="h-full rounded-full transition-all duration-500"
-                                                     :class="signal.confidence >= 0.8 ? 'bg-green-500' : signal.confidence >= 0.65 ? 'bg-yellow-500' : 'bg-red-500'"
-                                                     :style="'width: ' + (signal.confidence * 100) + '%'"></div>
-                                            </div>
-                                            <span class="font-medium" x-text="(signal.confidence * 100).toFixed(0) + '%'"></span>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <p class="text-gray-500 dark:text-gray-400">Risk Level</p>
-                                        <span class="px-2 py-0.5 text-xs font-medium rounded"
-                                              :class="signal.risk_level === 'low' ? 'bg-green-100 text-green-700' : signal.risk_level === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'"
-                                              x-text="signal.risk_level?.toUpperCase()"></span>
+                                    <div class="text-gray-600 dark:text-gray-400">
+                                        Best: <span class="font-medium" x-text="analysis.best_timeframe"></span>
                                     </div>
                                 </div>
-                                
-                                <div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
-                                    <span x-text="'Created: ' + formatTime(signal.created_at)"></span>
-                                    <span x-text="signal.status_message || signal.action"></span>
-                                </div>
+                            </div>
+                            
+                            <!-- Timeframe Grid -->
+                            <div class="p-3 grid grid-cols-6 gap-2">
+                                <template x-for="tf in ['M5', 'M15', 'M30', 'H1', 'H4', 'D1']" :key="tf">
+                                    <div class="text-center p-2 rounded border"
+                                         :class="getTimeframeClass(analysis.timeframes[tf])">
+                                        <div class="text-xs font-medium text-gray-600 dark:text-gray-400" x-text="tf"></div>
+                                        <div class="text-sm font-bold mt-1"
+                                             :class="getTimeframeBiasClass(analysis.timeframes[tf])"
+                                             x-text="analysis.timeframes[tf]?.bias?.substring(0,1) || '-'"></div>
+                                        <div class="text-xs mt-1"
+                                             x-text="analysis.timeframes[tf] ? (analysis.timeframes[tf].confidence * 100).toFixed(0) + '%' : '---'"></div>
+                                    </div>
+                                </template>
                             </div>
                         </div>
                     </template>
                     
-                    <div x-show="activeSignals.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
-                        <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div x-show="Object.keys(scannerResults).length === 0" class="text-center py-12 text-gray-500 dark:text-gray-400">
+                        <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                         </svg>
-                        <p>No active signals</p>
-                        <p class="text-sm mt-1">Click "Generate Signal" to create a new signal</p>
+                        <p class="text-lg">No scan results yet</p>
+                        <p class="text-sm mt-2">Click "Start Scanner" to begin automatic scanning</p>
                     </div>
                 </div>
             </div>
@@ -158,6 +208,48 @@
         
         <!-- Right Column -->
         <div class="space-y-6">
+            <!-- Top Signals -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Top Signals</h2>
+                </div>
+                <div class="p-4 space-y-3">
+                    <template x-for="signal in topSignals" :key="signal.symbol + signal.timeframe">
+                        <div class="p-3 rounded-lg border"
+                             :class="signal.bias === 'BUY' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-red-500 bg-red-50 dark:bg-red-900/20'">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <span class="font-bold text-gray-900 dark:text-white" x-text="signal.symbol"></span>
+                                    <span class="text-sm text-gray-600 dark:text-gray-400 ml-2" x-text="signal.timeframe"></span>
+                                </div>
+                                <span class="px-2 py-1 text-xs font-semibold rounded"
+                                      :class="signal.bias === 'BUY' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
+                                      x-text="signal.bias"></span>
+                            </div>
+                            <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
+                                <div>
+                                    <span class="text-gray-500 dark:text-gray-400">Confidence: </span>
+                                    <span class="font-medium" x-text="(signal.confidence * 100).toFixed(0) + '%'"></span>
+                                </div>
+                                <div>
+                                    <span class="text-gray-500 dark:text-gray-400">Confluence: </span>
+                                    <span class="font-medium" x-text="(signal.confluence * 100).toFixed(0) + '%'"></span>
+                                </div>
+                            </div>
+                            <div class="mt-2 flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
+                                <span class="text-green-600" x-text="signal.bullish_tf + ' bullish'"></span>
+                                <span>|</span>
+                                <span class="text-red-600" x-text="signal.bearish_tf + ' bearish'"></span>
+                            </div>
+                        </div>
+                    </template>
+                    
+                    <div x-show="topSignals.length === 0" class="text-center py-6 text-gray-500 dark:text-gray-400">
+                        <p>No signals found</p>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Market Radar -->
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
                 <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
@@ -181,43 +273,82 @@
                 </div>
             </div>
             
-            <!-- Probability Chart -->
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-                <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Probability Distribution</h2>
+            <!-- Confidence Meter -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Signal Confidence Meter</h3>
+                <div class="relative h-8 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
+                    <div class="absolute inset-0 confidence-meter opacity-50"></div>
+                    <div class="absolute h-full bg-white dark:bg-gray-900 transition-all duration-500"
+                         :style="'right: ' + (100 - avgConfidence * 100) + '%'"></div>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <span class="text-sm font-bold text-white drop-shadow" x-text="'Avg Confidence: ' + (avgConfidence * 100).toFixed(0) + '%'"></span>
+                    </div>
                 </div>
-                <div class="p-4">
-                    <div id="probability-chart" class="h-64"></div>
-                </div>
-            </div>
-            
-            <!-- Expected Duration -->
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-                <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Duration Analysis</h2>
-                </div>
-                <div class="p-4">
-                    <div id="duration-chart" class="h-48"></div>
+                <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    <span>Low</span>
+                    <span>Medium</span>
+                    <span>High</span>
                 </div>
             </div>
         </div>
     </div>
     
-    <!-- Confidence Meter -->
-    <div class="mt-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Signal Confidence Meter</h3>
-        <div class="relative h-8 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
-            <div class="absolute inset-0 confidence-meter opacity-50"></div>
-            <div class="absolute h-full bg-white dark:bg-gray-900 transition-all duration-500"
-                 :style="'right: ' + (100 - avgConfidence * 100) + '%'"></div>
-            <div class="absolute inset-0 flex items-center justify-center">
-                <span class="text-sm font-bold text-white drop-shadow" x-text="'Avg Confidence: ' + (avgConfidence * 100).toFixed(0) + '%'"></span>
-            </div>
+    <!-- Confluence Signals Section -->
+    <div class="mt-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+        <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">High Confluence Signals (Multiple Timeframes Agree)</h2>
+            <span class="text-sm text-gray-500 dark:text-gray-400" x-text="confluenceSignals.length + ' signals'"></span>
         </div>
-        <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-2">
-            <span>Low</span>
-            <span>Medium</span>
-            <span>High</span>
+        <div class="p-4">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead>
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Symbol</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Bias</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Best TF</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Confidence</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Confluence</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">TF Alignment</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        <template x-for="signal in confluenceSignals" :key="signal.symbol">
+                            <tr>
+                                <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white" x-text="signal.symbol"></td>
+                                <td class="px-4 py-3">
+                                    <span class="px-2 py-1 text-xs font-semibold rounded"
+                                          :class="signal.consensus_bias === 'BUY' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
+                                          x-text="signal.consensus_bias"></span>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400" x-text="signal.best_timeframe"></td>
+                                <td class="px-4 py-3">
+                                    <div class="flex items-center space-x-2">
+                                        <div class="w-16 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                            <div class="h-full rounded-full"
+                                                 :class="signal.best_confidence >= 0.8 ? 'bg-green-500' : signal.best_confidence >= 0.65 ? 'bg-yellow-500' : 'bg-red-500'"
+                                                 :style="'width: ' + (signal.best_confidence * 100) + '%'"></div>
+                                        </div>
+                                        <span class="text-sm text-gray-600 dark:text-gray-400" x-text="(signal.best_confidence * 100).toFixed(0) + '%'"></span>
+                                    </div>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400" x-text="(signal.confluence_score * 100).toFixed(0) + '%'"></td>
+                                <td class="px-4 py-3 text-sm">
+                                    <span class="text-green-600" x-text="signal.timeframe_alignment.bullish"></span>
+                                    <span class="text-gray-400"> / </span>
+                                    <span class="text-red-600" x-text="signal.timeframe_alignment.bearish"></span>
+                                    <span class="text-gray-400"> / </span>
+                                    <span class="text-gray-600 dark:text-gray-400" x-text="signal.timeframe_alignment.neutral"></span>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div x-show="confluenceSignals.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
+                <p>No high-confluence signals found</p>
+            </div>
         </div>
     </div>
 </div>
@@ -227,24 +358,38 @@
 <script>
 function dashboardApp() {
     return {
+        // Scanner state
+        scannerRunning: false,
+        scanning: false,
+        scannerStatus: 'Idle',
+        scannerSymbols: 0,
+        scanInterval: 30,
+        lastScanTime: 'Never',
+        
+        // Data
+        scannerResults: {},
+        topSignals: [],
+        confluenceSignals: [],
         activeSignals: [],
         marketTicks: {},
         marketSentiment: 'NEUTRAL',
-        generating: false,
-        probabilityChart: null,
-        durationChart: null,
         
+        // Computed
         get buyCount() {
-            return this.activeSignals.filter(s => s.bias === 'BUY').length;
+            return this.topSignals.filter(s => s.bias === 'BUY').length;
         },
         
         get sellCount() {
-            return this.activeSignals.filter(s => s.bias === 'SELL').length;
+            return this.topSignals.filter(s => s.bias === 'SELL').length;
+        },
+        
+        get highConfluenceCount() {
+            return this.confluenceSignals.length;
         },
         
         get avgConfidence() {
-            if (this.activeSignals.length === 0) return 0.5;
-            return this.activeSignals.reduce((sum, s) => sum + s.confidence, 0) / this.activeSignals.length;
+            if (this.topSignals.length === 0) return 0.5;
+            return this.topSignals.reduce((sum, s) => sum + s.confidence, 0) / this.topSignals.length;
         },
         
         get sentimentClass() {
@@ -254,19 +399,53 @@ function dashboardApp() {
         },
         
         init() {
+            this.loadScannerStatus();
             this.loadSignals();
             this.loadMarketData();
-            this.initCharts();
             
             // Auto-refresh every 5 seconds
             setInterval(() => {
+                this.loadScannerStatus();
                 this.loadSignals();
                 this.loadMarketData();
             }, 5000);
         },
         
+        async loadScannerStatus() {
+            try {
+                const response = await fetch('/api/scanner/status');
+                const data = await response.json();
+                
+                this.scannerRunning = data.state.is_running;
+                this.scannerStatus = data.state.is_running ? 'Running' : 'Stopped';
+                this.scannerSymbols = data.state.symbols_scanned;
+                this.lastScanTime = data.state.last_scan_time ? this.formatTime(data.state.last_scan_time) : 'Never';
+                
+                // Set scanner results
+                this.scannerResults = data.symbols || {};
+                
+            } catch (error) {
+                console.error('Error loading scanner status:', error);
+            }
+        },
+        
         async loadSignals() {
             try {
+                // Load top signals from scanner
+                const scanResponse = await fetch('/api/scanner/signals?limit=10');
+                const scanData = await scanResponse.json();
+                if (scanData.success) {
+                    this.topSignals = scanData.data;
+                }
+                
+                // Load confluence signals
+                const confResponse = await fetch('/api/scanner/confluence?min_confluence=0.6');
+                const confData = await confResponse.json();
+                if (confData.success) {
+                    this.confluenceSignals = confData.data;
+                }
+                
+                // Load active signals
                 const response = await fetch('/api/signals/cards');
                 const data = await response.json();
                 if (data.success) {
@@ -296,138 +475,71 @@ function dashboardApp() {
             }
         },
         
-        async generateSignal(symbol = 'EURUSD') {
-            this.generating = true;
-            try {
-                const response = await fetch('/api/signals/generate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ symbol, timeframe: 'M15' })
-                });
-                const data = await response.json();
-                
-                if (data.success) {
-                    await this.loadSignals();
-                    this.updateCharts();
-                } else {
-                    console.log('No signal generated:', data.message);
-                }
-            } catch (error) {
-                console.error('Error generating signal:', error);
-            } finally {
-                this.generating = false;
+        async toggleScanner() {
+            if (this.scannerRunning) {
+                await this.stopScanner();
+            } else {
+                await this.startScanner();
             }
         },
         
-        initCharts() {
-            // Probability Chart
-            this.probabilityChart = echarts.init(document.getElementById('probability-chart'));
-            this.updateProbabilityChart();
-            
-            // Duration Chart
-            this.durationChart = echarts.init(document.getElementById('duration-chart'));
-            this.updateDurationChart();
-            
-            // Handle resize
-            window.addEventListener('resize', () => {
-                this.probabilityChart?.resize();
-                this.durationChart?.resize();
-            });
+        async startScanner() {
+            try {
+                const response = await fetch('/api/scanner/start', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.scannerRunning = true;
+                    this.scannerStatus = 'Running';
+                }
+            } catch (error) {
+                console.error('Error starting scanner:', error);
+            }
         },
         
-        updateCharts() {
-            this.updateProbabilityChart();
-            this.updateDurationChart();
+        async stopScanner() {
+            try {
+                const response = await fetch('/api/scanner/stop', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.scannerRunning = false;
+                    this.scannerStatus = 'Stopped';
+                }
+            } catch (error) {
+                console.error('Error stopping scanner:', error);
+            }
         },
         
-        updateProbabilityChart() {
-            if (!this.probabilityChart) return;
-            
-            const data = this.activeSignals.map(s => ({
-                name: s.symbol,
-                value: [s.confidence * 100, s.probability * 100]
-            }));
-            
-            const option = {
-                backgroundColor: 'transparent',
-                tooltip: {
-                    trigger: 'item',
-                    formatter: '{b}: Confidence {c0}%, Probability {c1}%'
-                },
-                xAxis: {
-                    type: 'category',
-                    data: data.map(d => d.name),
-                    axisLabel: { color: '#9CA3AF' },
-                    axisLine: { lineStyle: { color: '#374151' } }
-                },
-                yAxis: {
-                    type: 'value',
-                    max: 100,
-                    axisLabel: { color: '#9CA3AF', formatter: '{value}%' },
-                    splitLine: { lineStyle: { color: '#374151', type: 'dashed' } }
-                },
-                series: [
-                    {
-                        name: 'Confidence',
-                        type: 'bar',
-                        data: data.map(d => d.value[0]),
-                        itemStyle: {
-                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                                { offset: 0, color: '#3B82F6' },
-                                { offset: 1, color: '#1D4ED8' }
-                            ])
-                        }
-                    },
-                    {
-                        name: 'Probability',
-                        type: 'bar',
-                        data: data.map(d => d.value[1]),
-                        itemStyle: {
-                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                                { offset: 0, color: '#10B981' },
-                                { offset: 1, color: '#059669' }
-                            ])
-                        }
-                    }
-                ]
-            };
-            
-            this.probabilityChart.setOption(option);
+        async scanNow() {
+            this.scanning = true;
+            try {
+                const response = await fetch('/api/scanner/scan-now', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    await this.loadScannerStatus();
+                    await this.loadSignals();
+                }
+            } catch (error) {
+                console.error('Error scanning:', error);
+            } finally {
+                this.scanning = false;
+            }
         },
         
-        updateDurationChart() {
-            if (!this.durationChart) return;
-            
-            const durations = this.activeSignals.map(s => {
-                const match = s.expected_duration?.match(/(\d+)/);
-                return match ? parseInt(match[1]) : 10;
-            });
-            
-            const option = {
-                backgroundColor: 'transparent',
-                tooltip: {
-                    trigger: 'item',
-                    formatter: '{b}: {c} min'
-                },
-                series: [{
-                    type: 'pie',
-                    radius: ['40%', '70%'],
-                    avoidLabelOverlap: false,
-                    itemStyle: {
-                        borderRadius: 10,
-                        borderColor: '#1F2937',
-                        borderWidth: 2
-                    },
-                    label: { show: false },
-                    data: durations.map((d, i) => ({
-                        value: d,
-                        name: this.activeSignals[i]?.symbol || `Signal ${i+1}`
-                    }))
-                }],
-                color: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']
-            };
-            
-            this.durationChart.setOption(option);
+        getTimeframeClass(tf) {
+            if (!tf) return 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600';
+            if (tf.signal_generated) return 'bg-green-100 dark:bg-green-900/30 border-green-300 dark:border-green-700';
+            if (tf.confidence >= 0.65) return 'bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700';
+            return 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600';
+        },
+        
+        getTimeframeBiasClass(tf) {
+            if (!tf) return 'text-gray-400';
+            if (tf.bias === 'BUY') return 'text-green-600 dark:text-green-400';
+            if (tf.bias === 'SELL') return 'text-red-600 dark:text-red-400';
+            return 'text-gray-400';
         },
         
         formatTime(timestamp) {

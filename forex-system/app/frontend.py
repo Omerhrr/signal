@@ -302,6 +302,77 @@ def api_signal_outcome(signal_id):
     return jsonify(result)
 
 
+# ============== Scanner API Routes ==============
+
+@app.route('/api/scanner/status')
+def api_scanner_status():
+    """Get scanner status"""
+    result = run_async(fetch_api("/api/scanner/status"))
+    return jsonify(result)
+
+
+@app.route('/api/scanner/start', methods=['POST'])
+def api_scanner_start():
+    """Start the scanner"""
+    result = run_async(fetch_api("/api/scanner/start", "POST", {}))
+    return jsonify(result)
+
+
+@app.route('/api/scanner/stop', methods=['POST'])
+def api_scanner_stop():
+    """Stop the scanner"""
+    result = run_async(fetch_api("/api/scanner/stop", "POST", {}))
+    return jsonify(result)
+
+
+@app.route('/api/scanner/signals')
+def api_scanner_signals():
+    """Get top scanner signals"""
+    limit = request.args.get('limit', 10)
+    result = run_async(fetch_api(f"/api/scanner/signals?limit={limit}"))
+    return jsonify(result)
+
+
+@app.route('/api/scanner/confluence')
+def api_scanner_confluence():
+    """Get confluence signals"""
+    min_confluence = request.args.get('min_confluence', 0.6)
+    result = run_async(fetch_api(f"/api/scanner/confluence?min_confluence={min_confluence}"))
+    return jsonify(result)
+
+
+@app.route('/api/scanner/scan-now', methods=['POST'])
+def api_scanner_scan_now():
+    """Trigger immediate scan"""
+    result = run_async(fetch_api("/api/scanner/scan-now", "POST", {}))
+    return jsonify(result)
+
+
+@app.route('/api/scanner/symbols', methods=['POST'])
+def api_scanner_symbols():
+    """Set scanner symbols"""
+    data = request.json
+    result = run_async(fetch_api("/api/scanner/symbols", "POST", data))
+    return jsonify(result)
+
+
+@app.route('/api/scanner/config', methods=['POST'])
+def api_scanner_config():
+    """Configure scanner"""
+    interval = request.args.get('interval_seconds')
+    confidence = request.args.get('min_confidence')
+    endpoint = "/api/scanner/config"
+    params = []
+    if interval:
+        params.append(f"interval_seconds={interval}")
+    if confidence:
+        params.append(f"min_confidence={confidence}")
+    if params:
+        endpoint += "?" + "&".join(params)
+    result = run_async(fetch_api(endpoint, "POST", {}))
+    return jsonify(result)
+
+
 # ============== Error Handlers ==============
 
 @app.errorhandler(404)

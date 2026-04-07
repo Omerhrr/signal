@@ -752,6 +752,128 @@ async def quantify_uncertainty(symbol: str = Query("EURUSD")):
         }
 
 
+# ============== Auto Scanner ==============
+
+from app.services.auto_scanner import auto_scanner
+
+# Set data pipeline reference
+auto_scanner.set_data_pipeline(data_pipeline)
+
+
+@app.get("/api/scanner/status", tags=["Scanner"])
+async def get_scanner_status():
+    """Get auto scanner status"""
+    return auto_scanner.get_scan_results()
+
+
+@app.post("/api/scanner/start", tags=["Scanner"])
+async def start_scanner():
+    """Start the auto scanner"""
+    if auto_scanner.state.is_running:
+        return APIResponse(
+            success=True,
+            message="Scanner already running",
+            data=auto_scanner.get_scan_results()["state"]
+        )
+    
+    # Set symbols from settings or MT5 data
+    auto_scanner.set_symbols(settings.trading_pairs)
+    await auto_scanner.start()
+    
+    return APIResponse(
+        success=True,
+        message="Scanner started",
+        data=auto_scanner.get_scan_results()["state"]
+    )
+
+
+@app.post("/api/scanner/stop", tags=["Scanner"])
+async def stop_scanner():
+    """Stop the auto scanner"""
+    await auto_scanner.stop()
+    
+    return APIResponse(
+        success=True,
+        message="Scanner stopped",
+        data=None
+    )
+
+
+@app.get("/api/scanner/signals", tags=["Scanner"])
+async def get_scanner_signals(limit: int = Query(10, ge=1, le=50)):
+    """Get top signals from scanner"""
+    signals = auto_scanner.get_top_signals(limit)
+    return APIResponse(
+        success=True,
+        message=f"Found {len(signals)} signals",
+        data=signals
+    )
+
+
+@app.get("/api/scanner/confluence", tags=["Scanner"])
+async def get_scanner_confluence(min_confluence: float = Query(0.6, ge=0.0, le=1.0)):
+    """Get signals with high multi-timeframe confluence"""
+    signals = auto_scanner.get_confluence_signals(min_confluence)
+    return APIResponse(
+        success=True,
+        message=f"Found {len(signals)} high-confluence signals",
+        data=signals
+    )
+
+
+@app.post("/api/scanner/symbols", tags=["Scanner"])
+async def set_scanner_symbols(symbols: List[str]):
+    """Set symbols for the scanner"""
+    auto_scanner.set_symbols(symbols)
+    
+    return APIResponse(
+        success=True,
+        message=f"Scanner symbols updated: {symbols}",
+        data=list(auto_scanner.symbols_to_scan)
+    )
+
+
+@app.post("/api/scanner/config", tags=["Scanner"])
+async def configure_scanner(
+    interval_seconds: Optional[int] = Query(None, ge=5, le=300),
+    min_confidence: Optional[float] = Query(None, ge=0.5, le=1.0)
+):
+    """Configure scanner settings"""
+    if interval_seconds:
+        auto_scanner.scan_interval_seconds = interval_seconds
+    if min_confidence:
+        auto_scanner.min_signal_confidence = min_confidence
+    
+    return APIResponse(
+        success=True,
+        message="Scanner configuration updated",
+        data={
+            "interval_seconds": auto_scanner.scan_interval_seconds,
+            "min_confidence": auto_scanner.min_signal_confidence,
+            "timeframes": auto_scanner.timeframes_to_scan,
+            "symbols": list(auto_scanner.symbols_to_scan)
+        }
+    )
+
+
+@app.post("/api/scanner/scan-now", tags=["Scanner"])
+async def trigger_scan_now():
+    """Trigger an immediate scan"""
+    if not auto_scanner.state.is_running:
+        # One-time scan
+        auto_scanner.set_symbols(settings.trading_pairs)
+        await auto_scanner._run_scan_cycle()
+    else:
+        # Already running, just return current results
+        pass
+    
+    return APIResponse(
+        success=True,
+        message="Scan completed",
+        data=auto_scanner.get_scan_results()
+    )
+
+
 # Run with: uvicorn app.api.routes:app --reload --host 0.0.0.0 --port 8000
 if __name__ == "__main__":
     import uvicorn
