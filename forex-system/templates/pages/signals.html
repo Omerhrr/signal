@@ -85,7 +85,7 @@
                                       :class="signal.bias === 'BUY' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'"
                                       x-text="signal.bias"></span>
                             </td>
-                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300" x-text="signal.entry_zone"></td>
+                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300" x-text="formatEntryZone(signal)"></td>
                             <td class="px-4 py-3">
                                 <div class="flex items-center space-x-2">
                                     <div class="w-16 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -96,7 +96,7 @@
                                     <span class="text-sm text-gray-600 dark:text-gray-300" x-text="(signal.confidence * 100).toFixed(0) + '%'"></span>
                                 </div>
                             </td>
-                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300" x-text="signal.expected_duration"></td>
+                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300" x-text="formatDuration(signal)"></td>
                             <td class="px-4 py-3">
                                 <span class="px-2 py-0.5 text-xs font-medium rounded"
                                       :class="{
@@ -256,6 +256,26 @@ function signalsApp() {
             if (!timestamp) return '';
             const date = new Date(timestamp);
             return date.toLocaleTimeString();
+        },
+        
+        formatEntryZone(signal) {
+            // Handle both SignalCard format (entry_zone string) and TradingSignal format (entry_zone_start/end)
+            if (signal.entry_zone) return signal.entry_zone;
+            if (signal.entry_zone_start !== undefined && signal.entry_zone_end !== undefined) {
+                const start = signal.entry_zone_start.toFixed(5);
+                const end = signal.entry_zone_end.toFixed(5);
+                return `${start} - ${end}`;
+            }
+            return 'N/A';
+        },
+        
+        formatDuration(signal) {
+            // Handle both SignalCard format (expected_duration string) and TradingSignal format (expected_duration_minutes)
+            if (signal.expected_duration) return signal.expected_duration;
+            if (signal.expected_duration_minutes !== undefined) {
+                return `${signal.expected_duration_minutes.toFixed(0)} min`;
+            }
+            return 'N/A';
         }
     };
 }
